@@ -8,12 +8,24 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- 최초 실행 시 사용자명 입력 오버레이 (기본 숨김, 사용자명 없으면 JS가 표시) -->
+  <div id="username-setup" class="overlay" hidden>
+    <div class="overlay-box">
+      <h2 class="overlay-title">테니스 게임로그를 시작해볼까요?</h2>
+      <p class="overlay-desc">사용자명을 입력해주세요.</p>
+      <input type="text" id="username-input" class="overlay-input" placeholder="사용자명 입력" maxlength="20" />
+      <p id="username-setup-message" class="form-message is-error"></p>
+      <button type="button" id="username-start-button" class="save-button">시작하기</button>
+    </div>
+  </div>
+
   <!-- 앱 전체를 감싸는 컨테이너 -->
   <div class="app">
 
-    <!-- 앱 제목 -->
+    <!-- 앱 제목 (사용자명은 JS로 채움) -->
     <header class="app-header">
-      <h1 class="app-title">🎾 다운더기린의 게임로그<img src="logo.png" alt="로고" class="app-logo" /></h1>
+      <h1 class="app-title">🎾 <span id="app-title-user"></span><img src="logo.png" alt="로고" class="app-logo" /></h1>
+      <p class="app-subtitle">by.다운더기린</p>
     </header>
 
     <!-- 탭 버튼 3개 (대시보드 / 경기 기록 / 통계) -->
@@ -59,6 +71,23 @@
           <p>대신 정기적인 백업을 진행해 주셔야 데이터가 날아가는 것을 방지할 수 있습니다.</p>
           <p>승률 70%를 향해 모두 화이팅!</p>
           <p><a href="mailto:ljc99@nate.com">ljc99@nate.com</a></p>
+        </section>
+
+        <!-- 사용자명 수정 (작게 노출) -->
+        <section class="username-edit">
+          <button type="button" id="username-edit-button" class="text-button">사용자명 수정</button>
+
+          <!-- 수정 폼 (기본 숨김) -->
+          <div id="username-edit-form" class="username-edit-form" hidden>
+            <p class="username-current">현재 사용자명: <span id="username-current-value"></span></p>
+            <label for="username-edit-input">새 사용자명</label>
+            <input type="text" id="username-edit-input" class="overlay-input" maxlength="20" />
+            <p id="username-edit-message" class="form-message is-error"></p>
+            <div class="username-edit-actions">
+              <button type="button" id="username-save-button" class="save-button">저장</button>
+              <button type="button" id="username-cancel-button" class="cancel-button">취소</button>
+            </div>
+          </div>
         </section>
 
       </section>

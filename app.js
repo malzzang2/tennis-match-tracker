@@ -29,7 +29,8 @@ var STORAGE_KEYS = {
   opponents: "tennis_opponents",
   venues: "tennis_venues",
   schemaVersion: "tennis_schema_version",
-  lastBackupAt: "tennis_last_backup_at"
+  lastBackupAt: "tennis_last_backup_at",
+  username: "tennis_username"
 };
 
 // 현재 데이터 스키마 버전 (향후 데이터 형식 변경 시 구분용)
@@ -97,6 +98,22 @@ function saveVenues(venues) {
   writeArray(STORAGE_KEYS.venues, venues);
 }
 
+// 사용자명 읽기/쓰기 (문자열 하나). 없으면 null.
+function loadUsername() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.username);
+  } catch (e) {
+    return null;
+  }
+}
+function saveUsername(name) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.username, name);
+  } catch (e) {
+    console.warn("사용자명 저장 오류:", e);
+  }
+}
+
 // 스키마 버전 읽기
 function loadSchemaVersion() {
   try {
@@ -145,6 +162,7 @@ function createBackupData() {
   return {
     backupVersion: 1,
     exportedAt: Date.now(),
+    username: loadUsername() || "",
     matches: loadMatches(),
     partners: loadPartners(),
     opponents: loadOpponents(),
@@ -206,7 +224,8 @@ function restoreBackup(data) {
     partners: loadPartners(),
     opponents: loadOpponents(),
     venues: loadVenues(),
-    schemaVersion: loadSchemaVersion()
+    schemaVersion: loadSchemaVersion(),
+    username: loadUsername()
   };
 
   try {
@@ -220,6 +239,14 @@ function restoreBackup(data) {
     saveVenues(Array.isArray(data.venues) ? data.venues : []);
     localStorage.setItem(STORAGE_KEYS.schemaVersion, version);
 
+    // 사용자명: 백업에 값이 있을 때만 복원. 없으면 기존 사용자명을 유지한다.
+    if (typeof data.username === "string") {
+      var cleanUsername = data.username.trim();
+      if (cleanUsername !== "") {
+        saveUsername(cleanUsername);
+      }
+    }
+
     return { ok: true };
   } catch (e) {
     // 3) 저장 중 오류 → 기존 데이터로 롤백
@@ -231,6 +258,9 @@ function restoreBackup(data) {
       saveVenues(snapshot.venues);
       if (snapshot.schemaVersion != null) {
         localStorage.setItem(STORAGE_KEYS.schemaVersion, snapshot.schemaVersion);
+      }
+      if (snapshot.username != null) {
+        saveUsername(snapshot.username);
       }
     } catch (e2) {
       console.warn("롤백 중 오류:", e2);
@@ -1571,10 +1601,11 @@ function handleRestoreFromText(text) {
     return;
   }
 
-  // 성공 후에만 화면 갱신 (목록·통계·대시보드) + 자동완성 목록 갱신
+  // 성공 후에만 화면 갱신 (목록·통계·대시보드) + 자동완성 목록 + 제목 갱신
   fillNameDatalists();
   refreshViews();
   renderBackupStatus();
+  renderUsernameTitle();
   showBackupMessage("데이터를 복원했습니다.", "success");
 }
 
@@ -1604,6 +1635,107 @@ function renderBackupStatus() {
   } else {
     noticeEl.textContent = "";
     noticeEl.hidden = true;
+  }
+}
+
+/*
+  [사용자명] UI 계층
+  - 제목을 "{사용자명}의 게임로그"로 표시 (textContent로 안전하게)
+  - 최초 실행 시 사용자명이 없으면 입력 오버레이 표시
+  - 개발자의 한마디 아래 "사용자명 수정" 버튼으로 인라인 수정
+*/
+
+// 저장된 사용자명으로 대시보드 제목을 갱신한다. (없으면 빈 문자열)
+function renderUsernameTitle() {
+  var el = document.getElementById("app-title-user");
+  if (!el) return;
+  var name = loadUsername();
+  el.textContent = (name && name.trim() !== "") ? (name + "의 게임로그") : "게임로그";
+}
+
+// 최초 실행: 사용자명이 없으면 입력 오버레이를 표시한다.
+function setupUsernameSetup() {
+  var overlay = document.getElementById("username-setup");
+  var input = document.getElementById("username-input");
+  var startButton = document.getElementById("username-start-button");
+  var messageEl = document.getElementById("username-setup-message");
+  if (!overlay || !input || !startButton) return;
+
+  var existing = loadUsername();
+  if (existing && existing.trim() !== "") {
+    overlay.hidden = true; // 이미 저장되어 있으면 바로 Dashboard
+    return;
+  }
+
+  // 사용자명 없음 → 입력 오버레이 표시
+  overlay.hidden = false;
+  if (messageEl) messageEl.textContent = "";
+
+  function trySave() {
+    var value = input.value.trim();
+    if (value === "") {
+      if (messageEl) messageEl.textContent = "사용자명을 입력해주세요.";
+      return;
+    }
+    saveUsername(value);
+    overlay.hidden = true;
+    renderUsernameTitle();
+  }
+
+  startButton.addEventListener("click", trySave);
+  // 엔터로도 시작할 수 있게
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      trySave();
+    }
+  });
+  input.focus();
+}
+
+// 사용자명 수정 UI를 연결한다.
+function setupUsernameEdit() {
+  var editButton = document.getElementById("username-edit-button");
+  var form = document.getElementById("username-edit-form");
+  var currentValue = document.getElementById("username-current-value");
+  var input = document.getElementById("username-edit-input");
+  var saveButton = document.getElementById("username-save-button");
+  var cancelButton = document.getElementById("username-cancel-button");
+  var messageEl = document.getElementById("username-edit-message");
+  if (!editButton || !form) return;
+
+  // "사용자명 수정" 버튼 → 현재 값 채우고 폼 표시
+  editButton.addEventListener("click", function () {
+    var name = loadUsername() || "";
+    if (currentValue) currentValue.textContent = name;
+    if (input) input.value = name;
+    if (messageEl) messageEl.textContent = "";
+    form.hidden = false;
+    editButton.hidden = true;
+    if (input) input.focus();
+  });
+
+  // 저장
+  if (saveButton && input) {
+    saveButton.addEventListener("click", function () {
+      var value = input.value.trim();
+      if (value === "") {
+        if (messageEl) messageEl.textContent = "사용자명을 입력해주세요.";
+        return;
+      }
+      saveUsername(value);
+      renderUsernameTitle();     // 제목 즉시 변경
+      form.hidden = true;
+      editButton.hidden = false;
+    });
+  }
+
+  // 취소: 기존 사용자명 유지
+  if (cancelButton) {
+    cancelButton.addEventListener("click", function () {
+      form.hidden = true;
+      editButton.hidden = false;
+    });
   }
 }
 
@@ -1666,6 +1798,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // 데이터 백업/복원 버튼 연결 + 마지막 백업 상태 표시
   setupDataManage();
   renderBackupStatus();
+
+  // 사용자명: 제목 표시 + 최초 입력 + 수정 UI 연결
+  renderUsernameTitle();
+  setupUsernameSetup();
+  setupUsernameEdit();
 });
 
 // 파일이 정상적으로 연결되었는지 콘솔에 표시

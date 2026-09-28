@@ -40,6 +40,13 @@ body {
   gap: 8px;
 }
 
+/* 제목 아래 고정 부제목 */
+.app-subtitle {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: #999;
+}
+
 /* 제목 뒤 로고 아이콘 */
 .app-logo {
   height: 3.5em;
@@ -651,4 +658,116 @@ body {
 
 .dev-note a {
   color: #2e7d32;
+}
+
+/* ============================================================
+   사용자명 (최초 입력 오버레이 / 수정)
+   ============================================================ */
+
+/* hidden 속성이 항상 display 규칙을 이기도록 (오버레이 flex 등 무시) */
+[hidden] {
+  display: none !important;
+}
+
+/* 최초 입력 오버레이: 화면 전체를 덮는다 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.overlay-box {
+  width: 100%;
+  max-width: 360px;
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.overlay-title {
+  font-size: 1.2rem;
+  color: #2e7d32;
+  margin-bottom: 8px;
+}
+
+.overlay-desc {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.overlay-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.overlay-input:focus {
+  outline: none;
+  border-color: #2e7d32;
+}
+
+.overlay .save-button {
+  margin-top: 8px;
+}
+
+/* 사용자명 수정 영역 */
+.username-edit {
+  margin-top: 12px;
+}
+
+/* 작게 노출되는 텍스트 버튼 */
+.text-button {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.text-button:hover {
+  color: #2e7d32;
+}
+
+.username-edit-form {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #e0e5e2;
+  border-radius: 8px;
+}
+
+.username-current {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.username-edit-form label {
+  display: block;
+  font-size: 0.9rem;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+.username-edit-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.username-edit-actions .save-button,
+.username-edit-actions .cancel-button {
+  flex: 1;
 }
