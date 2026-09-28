@@ -118,6 +118,56 @@ function ensureSchemaVersion() {
   }
 }
 
+/*
+  [백업/복원] Storage 계층에만 추가되는 내보내기·가져오기 함수.
+  - 다른 계층은 기존 load/save 함수를 그대로 사용하므로 통계·화면 코드는 바뀌지 않는다.
+*/
+
+// 현재 localStorage의 테니스 데이터를 백업용 객체 하나로 모아 반환한다.
+function exportData() {
+  return {
+    backupVersion: 1,
+    exportedAt: Date.now(),
+    matches: loadMatches(),
+    partners: loadPartners(),
+    opponents: loadOpponents(),
+    venues: loadVenues(),
+    schemaVersion: loadSchemaVersion() || CURRENT_SCHEMA_VERSION
+  };
+}
+
+// 백업 객체(data)가 올바른 형식인지 검증한다. { ok: true } 또는 { ok: false, reason }.
+// 여기서는 localStorage를 건드리지 않는다. (검증만 담당)
+function validateBackup(data) {
+  if (!data || typeof data !== "object") {
+    return { ok: false, reason: "객체가 아님" };
+  }
+  if (typeof data.backupVersion === "undefined") {
+    return { ok: false, reason: "backupVersion 없음" };
+  }
+  if (!Array.isArray(data.matches)) return { ok: false, reason: "matches 배열 아님" };
+  if (!Array.isArray(data.partners)) return { ok: false, reason: "partners 배열 아님" };
+  if (!Array.isArray(data.opponents)) return { ok: false, reason: "opponents 배열 아님" };
+  if (!Array.isArray(data.venues)) return { ok: false, reason: "venues 배열 아님" };
+  return { ok: true };
+}
+
+// 검증된 백업 객체(data)를 localStorage에 저장한다.
+// 이 함수는 반드시 validateBackup 통과 후에만 호출한다.
+function importData(data) {
+  saveMatches(data.matches);
+  savePartners(data.partners);
+  saveOpponents(data.opponents);
+  saveVenues(data.venues);
+  // 스키마 버전은 문자열로 보관. 백업에 없으면 현재 버전으로.
+  try {
+    var version = data.schemaVersion != null ? String(data.schemaVersion) : CURRENT_SCHEMA_VERSION;
+    localStorage.setItem(STORAGE_KEYS.schemaVersion, version);
+  } catch (e) {
+    console.warn("Storage 스키마 버전 저장 오류:", e);
+  }
+}
+
 
 // ============================================================
 // Data 계층 (데이터 생성·정규화·조작)     -- Task 4
@@ -1363,6 +1413,124 @@ function renderDashboard() {
   renderDashboardRecent(matches);
 }
 
+/*
+  [백업/복원] UI 계층
+  - 백업: 현재 데이터를 JSON 파일로 다운로드
+  - 복원: 파일 선택 → 검증 → 확인 → 저장 → 화면 갱신
+  - 검증 실패/취소/오류 시 기존 localStorage 데이터를 건드리지 않는다.
+*/
+
+// 데이터 관리 영역의 안내 메시지를 표시한다.
+function showDataMessage(text, type) {
+  var el = document.getElementById("data-manage-message");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("is-success", "is-error");
+  el.classList.add(type === "success" ? "is-success" : "is-error");
+}
+
+// 오늘 날짜를 YYYYMMDD 형태로 반환한다. (백업 파일명용)
+function getBackupDateStamp() {
+  var now = new Date();
+  var y = now.getFullYear();
+  var m = String(now.getMonth() + 1).padStart(2, "0");
+  var d = String(now.getDate()).padStart(2, "0");
+  return "" + y + m + d;
+}
+
+// 데이터 백업: JSON 파일 다운로드.
+function handleBackup() {
+  try {
+    var data = exportData();
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "tennis-match-backup-" + getBackupDateStamp() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showDataMessage("백업 파일을 다운로드했습니다.", "success");
+  } catch (e) {
+    console.warn("백업 오류:", e);
+    showDataMessage("백업 중 오류가 발생했습니다.", "error");
+  }
+}
+
+// 선택한 파일 내용(text)으로 복원을 수행한다.
+function handleRestoreFromText(text) {
+  var data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    showDataMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
+    return;
+  }
+
+  var result = validateBackup(data);
+  if (!result.ok) {
+    showDataMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
+    return;
+  }
+
+  // 검증 통과 후에만 확인 → 저장 (여기까지 localStorage는 변경되지 않았음)
+  var confirmed = window.confirm("현재 저장된 경기 기록을 백업 파일의 데이터로 교체합니다. 계속하시겠습니까?");
+  if (!confirmed) {
+    showDataMessage("복원을 취소했습니다.", "success");
+    return;
+  }
+
+  try {
+    importData(data);
+  } catch (e) {
+    console.warn("복원 저장 오류:", e);
+    showDataMessage("복원 중 오류가 발생했습니다.", "error");
+    return;
+  }
+
+  // 화면 즉시 갱신 (목록·통계·대시보드) + 자동완성 목록도 갱신
+  fillNameDatalists();
+  refreshViews();
+  showDataMessage("데이터를 복원했습니다.", "success");
+}
+
+// 데이터 관리 버튼과 파일 입력에 이벤트를 연결한다.
+function setupDataManage() {
+  var backupButton = document.getElementById("backup-button");
+  var restoreButton = document.getElementById("restore-button");
+  var restoreFile = document.getElementById("restore-file");
+
+  if (backupButton) {
+    backupButton.addEventListener("click", handleBackup);
+  }
+
+  // "데이터 복원" 버튼 → 숨은 파일 선택창 열기
+  if (restoreButton && restoreFile) {
+    restoreButton.addEventListener("click", function () {
+      restoreFile.value = ""; // 같은 파일 재선택도 인식되도록 초기화
+      restoreFile.click();
+    });
+
+    restoreFile.addEventListener("change", function () {
+      var file = restoreFile.files && restoreFile.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function () {
+        handleRestoreFromText(String(reader.result));
+      };
+      reader.onerror = function () {
+        showDataMessage("파일을 읽는 중 오류가 발생했습니다.", "error");
+      };
+      reader.readAsText(file);
+    });
+  }
+}
+
 // 페이지가 준비되면 초기화한다.
 document.addEventListener("DOMContentLoaded", function () {
   ensureSchemaVersion(); // 스키마 버전이 없으면 기록 (Task 3)
@@ -1385,6 +1553,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Task 13: 대시보드 초기 렌더링 (첫 화면)
   renderDashboard();
+
+  // 데이터 백업/복원 버튼 연결
+  setupDataManage();
 });
 
 // 파일이 정상적으로 연결되었는지 콘솔에 표시

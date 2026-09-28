@@ -37,6 +37,18 @@
         <h2 class="section-title" id="dashboard-recent-title">최근 경기</h2>
         <div id="dashboard-recent"></div>
 
+        <!-- 데이터 관리 (백업/복원) -->
+        <section class="data-manage">
+          <h2 class="section-title">데이터 관리</h2>
+          <div class="data-manage-buttons">
+            <button type="button" id="backup-button" class="cancel-button">데이터 백업</button>
+            <button type="button" id="restore-button" class="cancel-button">데이터 복원</button>
+          </div>
+          <!-- 복원용 파일 선택 input (화면에는 숨김, 버튼으로 실행) -->
+          <input type="file" id="restore-file" accept="application/json,.json" hidden />
+          <p id="data-manage-message" class="form-message" role="status"></p>
+        </section>
+
       </section>
 
       <!-- 탭 2: 경기 기록 -->

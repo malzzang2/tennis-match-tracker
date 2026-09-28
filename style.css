@@ -595,3 +595,25 @@ body {
     font-size: 0.9rem;
   }
 }
+
+/* ============================================================
+   데이터 관리 (백업/복원)
+   ============================================================ */
+
+.data-manage {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e5e2;
+}
+
+.data-manage-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 백업/복원 버튼: 좁은 화면에서 나란히, 아주 좁으면 줄바꿈 */
+.data-manage-buttons .cancel-button {
+  flex: 1 1 auto;
+  min-width: 130px;
+}
