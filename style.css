@@ -617,3 +617,38 @@ body {
   flex: 1 1 auto;
   min-width: 130px;
 }
+
+/* 마지막 백업 시각 */
+.backup-status {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+/* 7일 경과 백업 권장 안내 */
+.backup-notice {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: #c62828;
+}
+
+/* ============================================================
+   개발자의 한마디
+   ============================================================ */
+
+.dev-note {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e5e2;
+}
+
+.dev-note p {
+  font-size: 0.9rem;
+  color: #777;
+  line-height: 1.6;
+  margin: 2px 0;
+}
+
+.dev-note a {
+  color: #2e7d32;
+}

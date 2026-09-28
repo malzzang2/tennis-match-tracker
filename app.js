@@ -28,7 +28,8 @@ var STORAGE_KEYS = {
   partners: "tennis_partners",
   opponents: "tennis_opponents",
   venues: "tennis_venues",
-  schemaVersion: "tennis_schema_version"
+  schemaVersion: "tennis_schema_version",
+  lastBackupAt: "tennis_last_backup_at"
 };
 
 // 현재 데이터 스키마 버전 (향후 데이터 형식 변경 시 구분용)
@@ -123,8 +124,24 @@ function ensureSchemaVersion() {
   - 다른 계층은 기존 load/save 함수를 그대로 사용하므로 통계·화면 코드는 바뀌지 않는다.
 */
 
+// 마지막 백업 시각(Unix ms) 읽기/쓰기.
+function loadLastBackupAt() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.lastBackupAt); // 없으면 null
+  } catch (e) {
+    return null;
+  }
+}
+function saveLastBackupAt(timestamp) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.lastBackupAt, String(timestamp));
+  } catch (e) {
+    console.warn("마지막 백업 시각 저장 오류:", e);
+  }
+}
+
 // 현재 localStorage의 테니스 데이터를 백업용 객체 하나로 모아 반환한다.
-function exportData() {
+function createBackupData() {
   return {
     backupVersion: 1,
     exportedAt: Date.now(),
@@ -137,8 +154,8 @@ function exportData() {
 }
 
 // 백업 객체(data)가 올바른 형식인지 검증한다. { ok: true } 또는 { ok: false, reason }.
-// 여기서는 localStorage를 건드리지 않는다. (검증만 담당)
-function validateBackup(data) {
+// localStorage를 건드리지 않는 순수 검증 함수다.
+function validateBackupData(data) {
   if (!data || typeof data !== "object") {
     return { ok: false, reason: "객체가 아님" };
   }
@@ -149,22 +166,76 @@ function validateBackup(data) {
   if (!Array.isArray(data.partners)) return { ok: false, reason: "partners 배열 아님" };
   if (!Array.isArray(data.opponents)) return { ok: false, reason: "opponents 배열 아님" };
   if (!Array.isArray(data.venues)) return { ok: false, reason: "venues 배열 아님" };
+  if (typeof data.schemaVersion === "undefined") return { ok: false, reason: "schemaVersion 없음" };
   return { ok: true };
 }
 
-// 검증된 백업 객체(data)를 localStorage에 저장한다.
-// 이 함수는 반드시 validateBackup 통과 후에만 호출한다.
-function importData(data) {
-  saveMatches(data.matches);
-  savePartners(data.partners);
-  saveOpponents(data.opponents);
-  saveVenues(data.venues);
-  // 스키마 버전은 문자열로 보관. 백업에 없으면 현재 버전으로.
+// matches 배열의 각 항목을 안전하게 정리한다. (필드 누락/타입 이상 방어)
+// - 객체가 아닌 항목은 건너뛴다.
+// - 현재 앱이 사용하는 필드를 안전한 기본값으로 채운다. (기존 구조 유지)
+function sanitizeMatches(rawMatches) {
+  var safe = [];
+  (rawMatches || []).forEach(function (m) {
+    if (!m || typeof m !== "object") return; // 비정상 항목 제외
+    safe.push({
+      matchId: typeof m.matchId === "string" && m.matchId !== "" ? m.matchId : createMatchId(),
+      createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
+      date: typeof m.date === "string" ? m.date : "",
+      type: typeof m.type === "string" ? m.type : MATCH_TYPE_DOUBLES,
+      venue: typeof m.venue === "string" ? m.venue : "",
+      partner: typeof m.partner === "string" ? m.partner : "",
+      opponent1: typeof m.opponent1 === "string" ? m.opponent1 : "",
+      opponent2: typeof m.opponent2 === "string" ? m.opponent2 : "",
+      result: (m.result === "W" || m.result === "L") ? m.result : "",
+      score: typeof m.score === "string" ? m.score : "",
+      duration: typeof m.duration === "string" ? m.duration : "",
+      memo: typeof m.memo === "string" ? m.memo : ""
+    });
+  });
+  return safe;
+}
+
+// 검증된 백업 객체(data)를 localStorage에 원자적으로 저장한다.
+// - 저장 전 기존 데이터를 스냅샷으로 보관하고, 저장 중 오류가 나면 롤백한다.
+// - 반드시 validateBackupData 통과 후에만 호출한다.
+// 반환: { ok: true } 또는 { ok: false }
+function restoreBackup(data) {
+  // 1) 기존 데이터 스냅샷 (롤백 대비)
+  var snapshot = {
+    matches: loadMatches(),
+    partners: loadPartners(),
+    opponents: loadOpponents(),
+    venues: loadVenues(),
+    schemaVersion: loadSchemaVersion()
+  };
+
   try {
+    // 2) 메모리에서 안전하게 가공한 뒤 한 번에 저장
+    var cleanMatches = sanitizeMatches(data.matches);
     var version = data.schemaVersion != null ? String(data.schemaVersion) : CURRENT_SCHEMA_VERSION;
+
+    saveMatches(cleanMatches);
+    savePartners(Array.isArray(data.partners) ? data.partners : []);
+    saveOpponents(Array.isArray(data.opponents) ? data.opponents : []);
+    saveVenues(Array.isArray(data.venues) ? data.venues : []);
     localStorage.setItem(STORAGE_KEYS.schemaVersion, version);
+
+    return { ok: true };
   } catch (e) {
-    console.warn("Storage 스키마 버전 저장 오류:", e);
+    // 3) 저장 중 오류 → 기존 데이터로 롤백
+    console.warn("복원 저장 오류, 롤백 시도:", e);
+    try {
+      saveMatches(snapshot.matches);
+      savePartners(snapshot.partners);
+      saveOpponents(snapshot.opponents);
+      saveVenues(snapshot.venues);
+      if (snapshot.schemaVersion != null) {
+        localStorage.setItem(STORAGE_KEYS.schemaVersion, snapshot.schemaVersion);
+      }
+    } catch (e2) {
+      console.warn("롤백 중 오류:", e2);
+    }
+    return { ok: false };
   }
 }
 
@@ -1421,7 +1492,7 @@ function renderDashboard() {
 */
 
 // 데이터 관리 영역의 안내 메시지를 표시한다.
-function showDataMessage(text, type) {
+function showBackupMessage(text, type) {
   var el = document.getElementById("data-manage-message");
   if (!el) return;
   el.textContent = text;
@@ -1429,35 +1500,44 @@ function showDataMessage(text, type) {
   el.classList.add(type === "success" ? "is-success" : "is-error");
 }
 
-// 오늘 날짜를 YYYYMMDD 형태로 반환한다. (백업 파일명용)
-function getBackupDateStamp() {
-  var now = new Date();
-  var y = now.getFullYear();
-  var m = String(now.getMonth() + 1).padStart(2, "0");
-  var d = String(now.getDate()).padStart(2, "0");
-  return "" + y + m + d;
+// 타임스탬프(ms)를 YYYYMMDD 문자열로 변환한다. (백업 파일명용)
+function formatDateStampFromTime(ms) {
+  var d = new Date(ms);
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var day = String(d.getDate()).padStart(2, "0");
+  return "" + y + m + day;
 }
 
-// 데이터 백업: JSON 파일 다운로드.
-function handleBackup() {
+// 타임스탬프(ms)를 YYYY-MM-DD 문자열로 변환한다. (화면 표시용)
+function formatDateFromTime(ms) {
+  var s = formatDateStampFromTime(ms);
+  return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8);
+}
+
+// 데이터 백업: JSON 파일 다운로드 + 마지막 백업 시각 기록.
+function downloadBackup() {
   try {
-    var data = exportData();
+    var data = createBackupData();
     var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: "application/json" });
     var url = URL.createObjectURL(blob);
 
     var a = document.createElement("a");
     a.href = url;
-    a.download = "tennis-match-backup-" + getBackupDateStamp() + ".json";
+    a.download = "tennis-match-backup-" + formatDateStampFromTime(data.exportedAt) + ".json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showDataMessage("백업 파일을 다운로드했습니다.", "success");
+    // 마지막 백업 시각 기록 후 상태 표시 갱신
+    saveLastBackupAt(data.exportedAt);
+    renderBackupStatus();
+    showBackupMessage("백업 파일을 다운로드했습니다.", "success");
   } catch (e) {
     console.warn("백업 오류:", e);
-    showDataMessage("백업 중 오류가 발생했습니다.", "error");
+    showBackupMessage("백업 중 오류가 발생했습니다.", "error");
   }
 }
 
@@ -1467,35 +1547,64 @@ function handleRestoreFromText(text) {
   try {
     data = JSON.parse(text);
   } catch (e) {
-    showDataMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
+    showBackupMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
     return;
   }
 
-  var result = validateBackup(data);
+  var result = validateBackupData(data);
   if (!result.ok) {
-    showDataMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
+    showBackupMessage("올바른 테니스 경기 백업 파일이 아닙니다.", "error");
     return;
   }
 
   // 검증 통과 후에만 확인 → 저장 (여기까지 localStorage는 변경되지 않았음)
-  var confirmed = window.confirm("현재 저장된 경기 기록을 백업 파일의 데이터로 교체합니다. 계속하시겠습니까?");
+  var confirmed = window.confirm("현재 저장된 테니스 경기 기록을 백업 파일의 데이터로 교체합니다. 계속하시겠습니까?");
   if (!confirmed) {
-    showDataMessage("복원을 취소했습니다.", "success");
+    showBackupMessage("복원을 취소했습니다.", "success");
     return;
   }
 
-  try {
-    importData(data);
-  } catch (e) {
-    console.warn("복원 저장 오류:", e);
-    showDataMessage("복원 중 오류가 발생했습니다.", "error");
+  // 원자적 저장 (실패 시 내부에서 롤백)
+  var saved = restoreBackup(data);
+  if (!saved.ok) {
+    showBackupMessage("복원 중 오류가 발생하여 기존 데이터를 유지했습니다.", "error");
     return;
   }
 
-  // 화면 즉시 갱신 (목록·통계·대시보드) + 자동완성 목록도 갱신
+  // 성공 후에만 화면 갱신 (목록·통계·대시보드) + 자동완성 목록 갱신
   fillNameDatalists();
   refreshViews();
-  showDataMessage("데이터를 복원했습니다.", "success");
+  renderBackupStatus();
+  showBackupMessage("데이터를 복원했습니다.", "success");
+}
+
+// 마지막 백업 시각과 7일 경과 백업 권장 안내를 표시한다.
+function renderBackupStatus() {
+  var statusEl = document.getElementById("last-backup-status");
+  var noticeEl = document.getElementById("backup-notice");
+  if (!statusEl || !noticeEl) return;
+
+  var raw = loadLastBackupAt();
+  var lastAt = raw != null ? Number(raw) : NaN;
+
+  if (isNaN(lastAt) || lastAt <= 0) {
+    statusEl.textContent = "아직 데이터 백업을 하지 않았습니다.";
+  } else {
+    statusEl.textContent = "마지막 백업: " + formatDateFromTime(lastAt);
+  }
+
+  // 경기 기록이 있고, (백업한 적 없거나) 마지막 백업 후 7일 이상 지났으면 권장 안내
+  var hasMatches = loadMatches().length > 0;
+  var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  var overdue = isNaN(lastAt) || lastAt <= 0 || (Date.now() - lastAt >= sevenDaysMs);
+
+  if (hasMatches && overdue && !isNaN(lastAt) && lastAt > 0) {
+    noticeEl.textContent = "최근 백업 후 7일이 지났습니다. 데이터를 백업해 주세요.";
+    noticeEl.hidden = false;
+  } else {
+    noticeEl.textContent = "";
+    noticeEl.hidden = true;
+  }
 }
 
 // 데이터 관리 버튼과 파일 입력에 이벤트를 연결한다.
@@ -1505,7 +1614,7 @@ function setupDataManage() {
   var restoreFile = document.getElementById("restore-file");
 
   if (backupButton) {
-    backupButton.addEventListener("click", handleBackup);
+    backupButton.addEventListener("click", downloadBackup);
   }
 
   // "데이터 복원" 버튼 → 숨은 파일 선택창 열기
@@ -1524,7 +1633,7 @@ function setupDataManage() {
         handleRestoreFromText(String(reader.result));
       };
       reader.onerror = function () {
-        showDataMessage("파일을 읽는 중 오류가 발생했습니다.", "error");
+        showBackupMessage("파일을 읽는 중 오류가 발생했습니다.", "error");
       };
       reader.readAsText(file);
     });
@@ -1554,8 +1663,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Task 13: 대시보드 초기 렌더링 (첫 화면)
   renderDashboard();
 
-  // 데이터 백업/복원 버튼 연결
+  // 데이터 백업/복원 버튼 연결 + 마지막 백업 상태 표시
   setupDataManage();
+  renderBackupStatus();
 });
 
 // 파일이 정상적으로 연결되었는지 콘솔에 표시
