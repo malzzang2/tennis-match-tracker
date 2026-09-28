@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 모바일에서 올바른 배율로 표시되도록 하는 뷰포트 설정 (설계 §5) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>기린이의 랠리로그</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 앱 전체를 감싸는 컨테이너 -->
+  <div class="app">
+
+    <!-- 앱 제목 -->
+    <header class="app-header">
+      <h1 class="app-title">🎾 기린이의 랠리로그<img src="logo.png" alt="로고" class="app-logo" /></h1>
+    </header>
+
+    <!-- 탭 버튼 3개 (대시보드 / 경기 기록 / 통계) -->
+    <!-- 클릭 시 화면 전환 동작은 Task 2에서 구현 예정 -->
+    <nav class="tab-bar">
+      <button class="tab-button is-active" data-tab="dashboard">대시보드</button>
+      <button class="tab-button" data-tab="records">경기 기록</button>
+      <button class="tab-button" data-tab="stats">통계</button>
+    </nav>
+
+    <!-- 탭별 내용 영역 (지금은 빈 골격만; 실제 내용은 이후 Task에서 채움) -->
+    <main class="tab-panels">
+
+      <!-- 탭 1: 대시보드 (Task 13) -->
+      <section class="tab-panel is-active" id="dashboard">
+
+        <!-- 주요 통계 요약 -->
+        <div id="dashboard-summary"></div>
+
+        <!-- 최근 경기 요약 -->
+        <h2 class="section-title" id="dashboard-recent-title">최근 경기</h2>
+        <div id="dashboard-recent"></div>
+
+      </section>
+
+      <!-- 탭 2: 경기 기록 -->
+      <section class="tab-panel" id="records">
+
+        <!-- 경기 입력 폼 (저장 동작은 Task 6에서 구현) -->
+        <form id="match-form" class="match-form" autocomplete="off">
+          <h2 class="section-title">경기 기록 입력</h2>
+          <p class="form-hint"><span class="required-mark">*</span> 표시는 필수 항목입니다.</p>
+
+          <!-- 경기 날짜 (필수, 기본값=오늘) -->
+          <div class="field">
+            <label for="input-date">경기 날짜 <span class="required-mark">*</span></label>
+            <input type="date" id="input-date" name="date" required />
+          </div>
+
+          <!-- 경기 형태: 복식 고정 표시 (선택 불가) -->
+          <div class="field">
+            <label>경기 형태</label>
+            <div class="fixed-value">복식 (고정)</div>
+          </div>
+
+          <!-- 내 파트너 (자동완성) -->
+          <div class="field">
+            <label for="input-partner">내 파트너</label>
+            <input type="text" id="input-partner" name="partner" list="partner-list" placeholder="예: 홍길동" />
+            <datalist id="partner-list"></datalist>
+          </div>
+
+          <!-- 상대 선수 1 (자동완성) -->
+          <div class="field">
+            <label for="input-opponent1">상대 선수 1</label>
+            <input type="text" id="input-opponent1" name="opponent1" list="opponent-list" placeholder="예: 김철수" />
+          </div>
+
+          <!-- 상대 선수 2 (자동완성) -->
+          <div class="field">
+            <label for="input-opponent2">상대 선수 2</label>
+            <input type="text" id="input-opponent2" name="opponent2" list="opponent-list" placeholder="예: 이영희" />
+            <!-- 상대 선수 1·2가 같은 후보 목록을 공유 -->
+            <datalist id="opponent-list"></datalist>
+          </div>
+
+          <!-- 경기 결과: 승/패 큰 버튼 (필수) -->
+          <div class="field">
+            <label>경기 결과 <span class="required-mark">*</span></label>
+            <div class="result-buttons">
+              <button type="button" class="result-button result-win" data-result="W">승</button>
+              <button type="button" class="result-button result-loss" data-result="L">패</button>
+            </div>
+            <!-- 선택된 결과(W/L)를 담아 두는 숨은 입력칸 -->
+            <input type="hidden" id="input-result" name="result" value="" />
+          </div>
+
+          <!-- 스코어 (자유 입력) -->
+          <div class="field">
+            <label for="input-score">스코어</label>
+            <input type="text" id="input-score" name="score" placeholder="예: 6-4, 6-3 또는 6-4 / 3-6 / 10-8" />
+          </div>
+
+          <!-- 경기 시간 (자유 입력) -->
+          <div class="field">
+            <label for="input-duration">경기 시간</label>
+            <input type="text" id="input-duration" name="duration" placeholder="예: 90분" />
+          </div>
+
+          <!-- 메모 (선택) -->
+          <div class="field">
+            <label for="input-memo">메모 (선택)</label>
+            <textarea id="input-memo" name="memo" rows="3" placeholder="경기에 대한 메모"></textarea>
+          </div>
+
+          <!-- 저장 / 취소 버튼 (취소는 수정 모드에서만 표시) -->
+          <div class="field form-actions">
+            <button type="submit" class="save-button">저장</button>
+            <button type="button" id="cancel-edit-button" class="cancel-button" hidden>취소</button>
+          </div>
+
+          <!-- 저장 결과 안내 메시지 (성공/오류) -->
+          <p id="form-message" class="form-message" role="status"></p>
+        </form>
+
+        <!-- 경기 목록 (Task 7: 조회 + 최근 우선 정렬) -->
+        <section class="match-list-section">
+          <h2 class="section-title">경기 목록</h2>
+          <div id="match-list"></div>
+        </section>
+
+      </section>
+
+      <!-- 탭 3: 통계 (Task 12) -->
+      <section class="tab-panel" id="stats">
+
+        <!-- 전체 통계 요약 카드 -->
+        <h2 class="section-title">전체 통계</h2>
+        <div id="stats-overall"></div>
+
+        <!-- 월별 통계 -->
+        <h2 class="section-title">월별 통계</h2>
+        <div id="stats-monthly"></div>
+
+        <!-- 파트너별 통계 -->
+        <h2 class="section-title">파트너별 통계</h2>
+        <div id="stats-partner"></div>
+
+        <!-- 상대별 통계 -->
+        <h2 class="section-title">상대별 통계</h2>
+        <div id="stats-opponent"></div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
