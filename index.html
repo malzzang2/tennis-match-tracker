@@ -59,6 +59,13 @@
             <div class="fixed-value">복식 (고정)</div>
           </div>
 
+          <!-- 구장 (자동완성, 선택 입력) -->
+          <div class="field">
+            <label for="input-venue">구장 (선택)</label>
+            <input type="text" id="input-venue" name="venue" list="venue-list" placeholder="예: 올림픽공원 테니스장" />
+            <datalist id="venue-list"></datalist>
+          </div>
+
           <!-- 내 파트너 (자동완성) -->
           <div class="field">
             <label for="input-partner">내 파트너</label>
@@ -145,6 +152,10 @@
         <!-- 상대별 통계 -->
         <h2 class="section-title">상대별 통계</h2>
         <div id="stats-opponent"></div>
+
+        <!-- 구장별 통계 -->
+        <h2 class="section-title">구장별 통계</h2>
+        <div id="stats-venue"></div>
 
       </section>
 

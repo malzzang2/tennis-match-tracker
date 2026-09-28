@@ -27,6 +27,7 @@ var STORAGE_KEYS = {
   matches: "tennis_matches",
   partners: "tennis_partners",
   opponents: "tennis_opponents",
+  venues: "tennis_venues",
   schemaVersion: "tennis_schema_version"
 };
 
@@ -85,6 +86,14 @@ function loadOpponents() {
 }
 function saveOpponents(opponents) {
   writeArray(STORAGE_KEYS.opponents, opponents);
+}
+
+// 구장 이름 목록 읽기/쓰기 (자동완성 후보)
+function loadVenues() {
+  return readArray(STORAGE_KEYS.venues);
+}
+function saveVenues(venues) {
+  writeArray(STORAGE_KEYS.venues, venues);
 }
 
 // 스키마 버전 읽기
@@ -219,6 +228,7 @@ function buildNewMatch(formData) {
     createdAt: createCreatedAt(),
     date: formData.date,
     type: MATCH_TYPE_DOUBLES,
+    venue: normalizeName(formData.venue),
     partner: normalizeName(formData.partner),
     opponent1: normalizeName(formData.opponent1),
     opponent2: normalizeName(formData.opponent2),
@@ -246,6 +256,7 @@ function buildUpdatedMatch(existingMatch, formData) {
     createdAt: existingMatch.createdAt, // 유지
     date: formData.date,
     type: MATCH_TYPE_DOUBLES,
+    venue: normalizeName(formData.venue),
     partner: normalizeName(formData.partner),
     opponent1: normalizeName(formData.opponent1),
     opponent2: normalizeName(formData.opponent2),
@@ -480,6 +491,24 @@ function calcByOpponent(matches) {
   return buildSortedNameStats(groups);
 }
 
+// 구장별 통계. (trim된) venue로 그룹화, 빈 구장(정보 없음)은 제외.
+// 정렬·승률 규칙은 파트너/상대 통계와 동일(경기 수 많은 순, 0경기 시 "-").
+// 반환 예: [ { name: "올림픽공원 테니스장", total: 12, wins: 8, losses: 4, winRate: 67 }, ... ]
+function calcByVenue(matches) {
+  var list = Array.isArray(matches) ? matches : [];
+  var groups = {};
+
+  list.forEach(function (m) {
+    var name = normalizeName(m.venue);
+    if (name === "") {
+      return; // 구장 정보 없는 경기는 제외
+    }
+    addResultToGroup(groups, name, m.result);
+  });
+
+  return buildSortedNameStats(groups);
+}
+
 
 // ============================================================
 // UI 계층 (화면 렌더링 · 이벤트 처리)      -- Task 2, 5, 7, 12~14에서 구현
@@ -589,6 +618,16 @@ function fillNameDatalists() {
       opponentList.appendChild(option);
     });
   }
+
+  var venueList = document.getElementById("venue-list");
+  if (venueList) {
+    venueList.innerHTML = "";
+    loadVenues().forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      venueList.appendChild(option);
+    });
+  }
 }
 
 // 승/패 버튼 동작을 설정한다.
@@ -622,6 +661,7 @@ function setupResultButtons() {
 function readMatchForm() {
   return {
     date: document.getElementById("input-date").value,
+    venue: document.getElementById("input-venue").value,
     partner: document.getElementById("input-partner").value,
     opponent1: document.getElementById("input-opponent1").value,
     opponent2: document.getElementById("input-opponent2").value,
@@ -643,8 +683,8 @@ function showFormMessage(text, type) {
   messageEl.classList.add(type === "success" ? "is-success" : "is-error");
 }
 
-// 새 파트너/상대 이름을 각 이름 목록에 반영한다. (빈값·중복 제외는 addNameIfNew가 처리)
-function updateNameLists(partnerName, opponentNames) {
+// 새 파트너/상대/구장 이름을 각 목록에 반영한다. (빈값·중복 제외는 addNameIfNew가 처리)
+function updateNameLists(partnerName, opponentNames, venueName) {
   // 파트너 목록 갱신
   var partners = loadPartners();
   partners = addNameIfNew(partners, partnerName);
@@ -656,6 +696,11 @@ function updateNameLists(partnerName, opponentNames) {
     opponents = addNameIfNew(opponents, name);
   });
   saveOpponents(opponents);
+
+  // 구장 목록 갱신 (빈 값이면 addNameIfNew가 무시)
+  var venues = loadVenues();
+  venues = addNameIfNew(venues, venueName);
+  saveVenues(venues);
 }
 
 // 폼을 초기화한다. (날짜는 다시 오늘로, 승/패 선택 해제)
@@ -726,7 +771,7 @@ function handleSaveMatch() {
   }
 
   // --- 새 이름들을 이름 목록에 반영하고, 자동완성 목록도 갱신 ---
-  updateNameLists(savedMatch.partner, [savedMatch.opponent1, savedMatch.opponent2]);
+  updateNameLists(savedMatch.partner, [savedMatch.opponent1, savedMatch.opponent2], savedMatch.venue);
   fillNameDatalists();
 
   // --- 폼 초기화(신규 모드로 복귀) + 성공 메시지 ---
@@ -748,6 +793,7 @@ function handleSaveMatch() {
 // 폼에 경기 값을 채운다. (수정 모드 진입 시 사용)
 function fillMatchForm(match) {
   document.getElementById("input-date").value = match.date || "";
+  document.getElementById("input-venue").value = match.venue || "";
   document.getElementById("input-partner").value = match.partner || "";
   document.getElementById("input-opponent1").value = match.opponent1 || "";
   document.getElementById("input-opponent2").value = match.opponent2 || "";
@@ -936,7 +982,10 @@ function createMatchCard(match) {
     opponentText = opponentText + " / " + match.opponent2;
   }
 
-  // 세부 정보 행들
+  // 세부 정보 행들 (구장은 값이 있을 때만 표시)
+  if (match.venue && match.venue !== "") {
+    card.appendChild(createInfoRow("구장", match.venue));
+  }
   card.appendChild(createInfoRow("파트너", match.partner || ""));
   card.appendChild(createInfoRow("상대", opponentText));
   card.appendChild(createInfoRow("스코어", match.score || ""));
@@ -1185,6 +1234,7 @@ function renderStats() {
   renderMonthlyStats(matches);
   renderNameStatsTable("stats-partner", calcByPartner(matches), "파트너", "표시할 파트너 통계가 없습니다.");
   renderNameStatsTable("stats-opponent", calcByOpponent(matches), "상대", "표시할 상대 통계가 없습니다.");
+  renderNameStatsTable("stats-venue", calcByVenue(matches), "구장", "표시할 구장 통계가 없습니다.");
 }
 
 /*
