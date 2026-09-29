@@ -157,6 +157,21 @@ body {
   resize: vertical;
 }
 
+/* 상대 선수 옆 NTRP 힌트: 입력창 아래에 작게 표시 */
+.ntrp-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+/* NTRP 미등록 등 강조가 필요 없는 상태는 회색으로 */
+.ntrp-hint.is-muted {
+  color: #888;
+  font-weight: 400;
+}
+
 /* 입력창 포커스 시 강조 */
 .field input:focus,
 .field textarea:focus {
@@ -174,6 +189,68 @@ body {
 }
 
 /* 승/패 버튼 영역: 두 버튼이 가로 폭을 균등하게 */
+/* 경기 점수 입력: 내 점수 : 상대 점수 */
+.score-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.score-cell {
+  flex: 1;
+}
+
+.score-cell-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.score-inputs input[type="number"] {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-family: inherit;
+  text-align: center;
+  background-color: #fff;
+}
+
+.score-inputs input[type="number"]:focus {
+  outline: none;
+  border-color: #2e7d32;
+}
+
+.score-sep {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #888;
+  padding-bottom: 10px;
+}
+
+/* 점수로 자동 판정된 결과 미리보기 */
+.result-preview {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.result-preview.is-win {
+  color: #2e7d32;
+}
+
+.result-preview.is-draw {
+  color: #616161;
+}
+
+.result-preview.is-loss {
+  color: #c62828;
+}
+
 .result-buttons {
   display: flex;
   gap: 12px;
@@ -195,6 +272,13 @@ body {
 .result-button.result-win.is-selected {
   background-color: #2e7d32;
   border-color: #2e7d32;
+  color: #fff;
+}
+
+/* 선택된 무승부 버튼 (회색 계열) */
+.result-button.result-draw.is-selected {
+  background-color: #757575;
+  border-color: #757575;
   color: #fff;
 }
 
@@ -291,6 +375,11 @@ body {
 .match-result.is-win {
   background-color: #e8f5e9;
   color: #2e7d32;
+}
+
+.match-result.is-draw {
+  background-color: #f0f0f0;
+  color: #616161;
 }
 
 .match-result.is-loss {
@@ -475,7 +564,8 @@ body {
 .recent-line {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   padding: 10px 12px;
   border: 1px solid #e0e5e2;
   border-radius: 8px;
@@ -498,6 +588,11 @@ body {
 .recent-badge.is-win {
   background-color: #e8f5e9;
   color: #2e7d32;
+}
+
+.recent-badge.is-draw {
+  background-color: #f0f0f0;
+  color: #616161;
 }
 
 .recent-badge.is-loss {
@@ -770,4 +865,193 @@ body {
 .username-edit-actions .save-button,
 .username-edit-actions .cancel-button {
   flex: 1;
+}
+
+/* 내 NTRP 설정 (사용자명 수정 영역 아래) */
+.my-ntrp-setting {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.my-ntrp-setting label {
+  font-size: 0.9rem;
+  color: #444;
+  font-weight: 600;
+}
+
+.my-ntrp-setting select {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  background-color: #fff;
+}
+
+.my-ntrp-setting .save-button {
+  min-height: 40px;
+}
+
+/* 내 NTRP 설정의 현재값 텍스트는 줄바꿈 없이 옆에 표시 */
+.my-ntrp-setting .ntrp-hint {
+  display: inline;
+  margin-top: 0;
+}
+
+/* 경기 카드 내 NTRP 전력 분석 블록 */
+.ntrp-analysis {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-top: 1px dashed #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ntrp-analysis-teams {
+  font-size: 0.9rem;
+  color: #444;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.ntrp-analysis-diff {
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+/* 전력차 색 구분: 우세(초록) / 열세(빨강) / 동급(회색) */
+.ntrp-analysis-diff.is-favored {
+  color: #2e7d32;
+}
+
+.ntrp-analysis-diff.is-underdog {
+  color: #c62828;
+}
+
+.ntrp-analysis-diff.is-even {
+  color: #616161;
+}
+
+/* NTRP 미등록 표시 */
+.ntrp-analysis.is-unavailable .ntrp-analysis-na {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+/* NTRP 전력별 분석: 평균 전력차 문구 */
+.ntrp-avg-diff {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+  word-break: keep-all;
+}
+
+/* 전력 열세/우세(업셋) 분석 문구 */
+.ntrp-upset-line {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #444;
+  word-break: keep-all;
+}
+
+.ntrp-upset-line.is-favored {
+  color: #2e7d32;
+}
+
+.ntrp-upset-line.is-underdog {
+  color: #c62828;
+}
+
+.ntrp-upset-line.is-even {
+  color: #616161;
+}
+
+/* 열이 많은 통계 표(파트너 NTRP 등)를 모바일에서 가로 스크롤로 처리 */
+.stats-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stats-table-scroll .stats-table {
+  min-width: 640px; /* 열이 많아 좁은 화면에서 눌리지 않도록 최소 폭 확보 */
+}
+
+/* 대시보드 최근 경기: 점수 표시 (내 점수 - 상대 점수) */
+.recent-score {
+  flex-basis: 100%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #333;
+}
+
+/* 대시보드 최근 경기: NTRP 분석 블록 */
+.recent-ntrp {
+  flex-basis: 100%;
+  border-top: 1px dashed #e0e0e0;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-ntrp-teams {
+  font-size: 0.85rem;
+  color: #444;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.recent-ntrp-diff {
+  font-size: 0.85rem;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.recent-ntrp-diff.is-favored { color: #2e7d32; }
+.recent-ntrp-diff.is-underdog { color: #c62828; }
+.recent-ntrp-diff.is-even { color: #616161; }
+
+.recent-ntrp.is-unavailable {
+  font-size: 0.85rem;
+  color: #999;
+  border-top: 1px dashed #e0e0e0;
+  padding-top: 6px;
+}
+
+/* 대시보드: 가장 큰 전력 열세 승리 강조 박스 */
+.dashboard-upset-highlight {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cfe8d0;
+  border-radius: 8px;
+  background-color: #f2faf3;
+}
+
+.dashboard-upset-title {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.dashboard-upset-diff {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.dashboard-upset-diff.is-favored { color: #2e7d32; }
+
+.dashboard-upset-score {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  margin-top: 2px;
 }

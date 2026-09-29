@@ -45,6 +45,18 @@
         <!-- 주요 통계 요약 -->
         <div id="dashboard-summary"></div>
 
+        <!-- NTRP 경기 분석 요약 -->
+        <h2 class="section-title" id="dashboard-ntrp-title">NTRP 경기 분석</h2>
+        <div id="dashboard-ntrp"></div>
+
+        <!-- NTRP 전력별 승률 -->
+        <h2 class="section-title" id="dashboard-ntrp-difficulty-title">NTRP 전력별 승률</h2>
+        <div id="dashboard-ntrp-difficulty"></div>
+
+        <!-- 전력 열세 경기 분석 -->
+        <h2 class="section-title" id="dashboard-ntrp-upset-title">전력 열세 경기 분석</h2>
+        <div id="dashboard-ntrp-upset"></div>
+
         <!-- 최근 경기 요약 -->
         <h2 class="section-title" id="dashboard-recent-title">최근 경기</h2>
         <div id="dashboard-recent"></div>
@@ -70,6 +82,7 @@
           <p>데이터는 개인 PC나 모바일의 localStorage에 저장되기 때문에 개인정보 유출 위험은 없습니다.</p>
           <p>대신 정기적인 백업을 진행해 주셔야 데이터가 날아가는 것을 방지할 수 있습니다.</p>
           <p>승률 70%를 향해 모두 화이팅!</p>
+          <p>26.09.29 - 무승부 신설, NTRP 를 통한 경기분석 기능 추가.</p>
           <p><a href="mailto:ljc99@nate.com">ljc99@nate.com</a></p>
         </section>
 
@@ -87,6 +100,16 @@
               <button type="button" id="username-save-button" class="save-button">저장</button>
               <button type="button" id="username-cancel-button" class="cancel-button">취소</button>
             </div>
+          </div>
+
+          <!-- 내 NTRP 설정 -->
+          <div class="my-ntrp-setting">
+            <label for="my-ntrp-input">내 NTRP</label>
+            <select id="my-ntrp-input">
+              <option value="">모름</option>
+            </select>
+            <button type="button" id="my-ntrp-save-button" class="save-button">저장</button>
+            <span id="my-ntrp-current" class="ntrp-hint"></span>
           </div>
         </section>
 
@@ -119,10 +142,18 @@
             <datalist id="venue-list"></datalist>
           </div>
 
+          <!-- 나 (본인): 이름은 사용자명, NTRP는 내 NTRP 설정값 -->
+          <div class="field">
+            <label>나</label>
+            <div class="fixed-value"><span id="me-name"></span></div>
+            <span id="ntrp-me" class="ntrp-hint"></span>
+          </div>
+
           <!-- 내 파트너 (자동완성) -->
           <div class="field">
             <label for="input-partner">내 파트너</label>
             <input type="text" id="input-partner" name="partner" list="partner-list" placeholder="예: 홍길동" />
+            <span id="ntrp-partner" class="ntrp-hint"></span>
             <datalist id="partner-list"></datalist>
           </div>
 
@@ -130,31 +161,36 @@
           <div class="field">
             <label for="input-opponent1">상대 선수 1</label>
             <input type="text" id="input-opponent1" name="opponent1" list="opponent-list" placeholder="예: 김철수" />
+            <span id="ntrp-opponent1" class="ntrp-hint"></span>
           </div>
 
           <!-- 상대 선수 2 (자동완성) -->
           <div class="field">
             <label for="input-opponent2">상대 선수 2</label>
             <input type="text" id="input-opponent2" name="opponent2" list="opponent-list" placeholder="예: 이영희" />
+            <span id="ntrp-opponent2" class="ntrp-hint"></span>
             <!-- 상대 선수 1·2가 같은 후보 목록을 공유 -->
             <datalist id="opponent-list"></datalist>
           </div>
 
-          <!-- 경기 결과: 승/패 큰 버튼 (필수) -->
+          <!-- 경기 점수: 내 점수 / 상대 점수 (필수). 승/무/패는 자동 판정된다. -->
           <div class="field">
-            <label>경기 결과 <span class="required-mark">*</span></label>
-            <div class="result-buttons">
-              <button type="button" class="result-button result-win" data-result="W">승</button>
-              <button type="button" class="result-button result-loss" data-result="L">패</button>
+            <label>경기 점수 <span class="required-mark">*</span></label>
+            <div class="score-inputs">
+              <div class="score-cell">
+                <label for="input-my-score" class="score-cell-label">내 점수</label>
+                <input type="number" id="input-my-score" name="myScore" min="0" step="1" inputmode="numeric" placeholder="예: 6" />
+              </div>
+              <span class="score-sep">:</span>
+              <div class="score-cell">
+                <label for="input-opp-score" class="score-cell-label">상대 점수</label>
+                <input type="number" id="input-opp-score" name="oppScore" min="0" step="1" inputmode="numeric" placeholder="예: 4" />
+              </div>
             </div>
-            <!-- 선택된 결과(W/L)를 담아 두는 숨은 입력칸 -->
+            <!-- 점수로 자동 판정된 결과를 사람이 볼 수 있게 표시 -->
+            <p id="result-preview" class="result-preview"></p>
+            <!-- 자동 판정된 결과(W/L/D)를 담아 두는 숨은 입력칸 (저장/통계에서 사용) -->
             <input type="hidden" id="input-result" name="result" value="" />
-          </div>
-
-          <!-- 스코어 (자유 입력) -->
-          <div class="field">
-            <label for="input-score">스코어</label>
-            <input type="text" id="input-score" name="score" placeholder="예: 6-4, 6-3 또는 6-4 / 3-6 / 10-8" />
           </div>
 
           <!-- 경기 시간 (자유 입력) -->
@@ -185,6 +221,33 @@
           <div id="match-list"></div>
         </section>
 
+        <!-- 상대방 관리 (Master + NTRP) -->
+        <section class="opponent-master-section">
+          <h2 class="section-title">상대방 관리</h2>
+
+          <!-- 등록/수정 폼 -->
+          <div class="master-form">
+            <div class="field">
+              <label for="master-name-input">상대방 이름</label>
+              <input type="text" id="master-name-input" placeholder="예: 김철수" />
+            </div>
+            <div class="field">
+              <label for="master-ntrp-input">NTRP</label>
+              <select id="master-ntrp-input">
+                <option value="">모름</option>
+              </select>
+            </div>
+            <p id="master-message" class="form-message is-error"></p>
+            <div class="master-form-actions">
+              <button type="button" id="master-add-button" class="save-button">추가</button>
+              <button type="button" id="master-cancel-button" class="cancel-button" hidden>취소</button>
+            </div>
+          </div>
+
+          <!-- 목록 -->
+          <div id="master-list"></div>
+        </section>
+
       </section>
 
       <!-- 탭 3: 통계 (Task 12) -->
@@ -193,6 +256,14 @@
         <!-- 전체 통계 요약 카드 -->
         <h2 class="section-title">전체 통계</h2>
         <div id="stats-overall"></div>
+
+        <!-- NTRP 전력별 경기 분석 -->
+        <h2 class="section-title">NTRP 전력별 경기 분석</h2>
+        <div id="stats-ntrp"></div>
+
+        <!-- 전력 열세 / 우세 경기 분석 (업셋) -->
+        <h2 class="section-title">전력 열세 경기 분석</h2>
+        <div id="stats-ntrp-upset"></div>
 
         <!-- 월별 통계 -->
         <h2 class="section-title">월별 통계</h2>
