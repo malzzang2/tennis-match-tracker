@@ -475,13 +475,19 @@ function normalizeNtrp(value) {
   return Math.round(num * 10) / 10;
 }
 
-// Master에서 이름으로 항목을 찾는다. (trim + 정확히 일치) 없으면 null.
+// NTRP 조회/중복판정 전용 비교 키. trim + 소문자화하여 대소문자 구분 없이 비교한다.
+// (표시 이름·저장·통계 집계에는 사용하지 않고, Master 조회 비교에만 쓴다.)
+function opponentNameKey(name) {
+  return normalizeName(name).toLowerCase();
+}
+
+// Master에서 이름으로 항목을 찾는다. (trim + 대소문자 무시 일치) 없으면 null.
 function findOpponentMaster(name) {
-  var target = normalizeName(name);
+  var target = opponentNameKey(name);
   if (target === "") return null;
   var list = loadOpponentMaster();
   for (var i = 0; i < list.length; i++) {
-    if (normalizeName(list[i].name) === target) {
+    if (opponentNameKey(list[i].name) === target) {
       return list[i];
     }
   }
@@ -1572,6 +1578,10 @@ function showMasterMessage(text, type) {
 // 현재 수정 중인 Master 이름 (신규 추가 모드면 null)
 var editingMasterName = null;
 
+// 상대방 관리 목록 페이지네이션 상태 (1-base) 및 페이지당 개수
+var masterListPage = 1;
+var MASTER_LIST_PAGE_SIZE = 10;
+
 // 상대방 Master 목록을 표로 그린다.
 function renderOpponentMasterList() {
   var el = document.getElementById("master-list");
@@ -1595,6 +1605,15 @@ function renderOpponentMasterList() {
     return;
   }
 
+  // 페이지 범위 보정 (삭제 등으로 현재 페이지가 범위를 벗어난 경우)
+  var totalPages = Math.max(1, Math.ceil(list.length / MASTER_LIST_PAGE_SIZE));
+  if (masterListPage > totalPages) masterListPage = totalPages;
+  if (masterListPage < 1) masterListPage = 1;
+
+  // 현재 페이지 구간만 표시
+  var start = (masterListPage - 1) * MASTER_LIST_PAGE_SIZE;
+  var pageItems = list.slice(start, start + MASTER_LIST_PAGE_SIZE);
+
   var table = document.createElement("table");
   table.className = "stats-table";
 
@@ -1609,7 +1628,7 @@ function renderOpponentMasterList() {
   table.appendChild(thead);
 
   var tbody = document.createElement("tbody");
-  list.forEach(function (m) {
+  pageItems.forEach(function (m) {
     var tr = document.createElement("tr");
 
     var nameTd = document.createElement("td");
@@ -1643,6 +1662,14 @@ function renderOpponentMasterList() {
   });
   table.appendChild(tbody);
   el.appendChild(table);
+
+  // 페이지가 2개 이상일 때만 페이지네이션 표시
+  if (totalPages > 1) {
+    el.appendChild(createPaginationControls(masterListPage, totalPages, function (newPage) {
+      masterListPage = newPage;
+      renderOpponentMasterList();
+    }));
+  }
 }
 
 // 관리 폼을 신규 추가 모드로 초기화한다.
@@ -1708,7 +1735,12 @@ function handleSaveMaster() {
     if (result.reason === "빈 이름") {
       showMasterMessage("상대방 이름을 입력해주세요.", "error");
     } else if (result.reason === "중복 이름") {
-      showMasterMessage("이미 등록된 상대방입니다.", "error");
+      // 기존에 등록된 상대의 NTRP를 함께 안내한다. (대소문자 무시 조회)
+      var existing = findOpponentMaster(name);
+      var ntrpText = (existing && typeof existing.ntrp === "number")
+        ? ("NTRP " + existing.ntrp.toFixed(1))
+        : "NTRP 미등록";
+      showMasterMessage("이미 등록된 상대방입니다. (" + ntrpText + ")", "error");
     } else {
       showMasterMessage("저장하지 못했습니다.", "error");
     }
@@ -1942,6 +1974,7 @@ function handleSaveMatch() {
     savedMatch = buildNewMatch(formData);
     matches.push(savedMatch);
     saveMatches(matches);
+    matchListPage = 1; // 방금 등록한 경기가 최근 목록 첫 페이지에 보이도록
   }
 
   // --- 새 이름들을 이름 목록에 반영하고, 자동완성 목록도 갱신 ---
@@ -2314,6 +2347,44 @@ function createEmptyState() {
 }
 
 // 경기 목록을 화면에 그린다. (저장 데이터를 다시 읽어 최신 상태로 표시)
+// 목록 페이지네이션 컨트롤(이전/다음 + "N / M 페이지")을 만든다. (경기·상대방 목록 공용)
+// onGo(newPage): 페이지 이동 시 호출할 콜백. page/totalPages는 1-base.
+function createPaginationControls(page, totalPages, onGo) {
+  var nav = document.createElement("div");
+  nav.className = "pagination";
+
+  var prev = document.createElement("button");
+  prev.type = "button";
+  prev.className = "pagination-button";
+  prev.textContent = "이전";
+  prev.disabled = page <= 1;
+  prev.addEventListener("click", function () {
+    if (page > 1) onGo(page - 1);
+  });
+
+  var info = document.createElement("span");
+  info.className = "pagination-info";
+  info.textContent = page + " / " + totalPages + " 페이지";
+
+  var next = document.createElement("button");
+  next.type = "button";
+  next.className = "pagination-button";
+  next.textContent = "다음";
+  next.disabled = page >= totalPages;
+  next.addEventListener("click", function () {
+    if (page < totalPages) onGo(page + 1);
+  });
+
+  nav.appendChild(prev);
+  nav.appendChild(info);
+  nav.appendChild(next);
+  return nav;
+}
+
+// 경기 목록 페이지네이션 상태 (1-base) 및 페이지당 개수
+var matchListPage = 1;
+var MATCH_LIST_PAGE_SIZE = 5;
+
 function renderMatchList() {
   var listEl = document.getElementById("match-list");
   if (!listEl) {
@@ -2331,10 +2402,25 @@ function renderMatchList() {
     return;
   }
 
-  // 정렬된 순서대로 카드 추가
-  matches.forEach(function (match) {
+  // 페이지 범위 보정 (삭제 등으로 현재 페이지가 범위를 벗어난 경우)
+  var totalPages = Math.max(1, Math.ceil(matches.length / MATCH_LIST_PAGE_SIZE));
+  if (matchListPage > totalPages) matchListPage = totalPages;
+  if (matchListPage < 1) matchListPage = 1;
+
+  // 현재 페이지 구간만 표시
+  var start = (matchListPage - 1) * MATCH_LIST_PAGE_SIZE;
+  var pageItems = matches.slice(start, start + MATCH_LIST_PAGE_SIZE);
+  pageItems.forEach(function (match) {
     listEl.appendChild(createMatchCard(match));
   });
+
+  // 페이지가 2개 이상일 때만 페이지네이션 표시
+  if (totalPages > 1) {
+    listEl.appendChild(createPaginationControls(matchListPage, totalPages, function (newPage) {
+      matchListPage = newPage;
+      renderMatchList();
+    }));
+  }
 }
 
 /*

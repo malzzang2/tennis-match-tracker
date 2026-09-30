@@ -1055,3 +1055,72 @@ body {
   color: #333;
   margin-top: 2px;
 }
+
+/* 목록 페이지네이션 (경기 목록 / 상대방 관리 목록 공용) */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.pagination-button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #333;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pagination-button:disabled {
+  color: #bbb;
+  background-color: #f5f5f5;
+  cursor: default;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: #666;
+  min-width: 84px;
+  text-align: center;
+}
+
+/* 사용자명 입력 오버레이의 사용 설명서 링크 */
+.overlay-guide-link {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.overlay-guide-link a {
+  color: #2e7d32;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.overlay-guide-link a:hover { text-decoration: underline; }
+
+/* 대시보드 하단 사용 설명서 링크 섹션 */
+.guide-link-section {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.guide-link-section a {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid #cfe8d0;
+  border-radius: 8px;
+  background-color: #f2faf3;
+  color: #2e7d32;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.guide-link-section a:hover { background-color: #e6f4e7; }
