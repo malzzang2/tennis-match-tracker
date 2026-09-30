@@ -2881,6 +2881,37 @@ function renderStats() {
   - 기록이 없으면 시작 안내와 경기 기록 탭으로 이동하는 버튼을 표시한다.
 */
 
+// "요즘 폼" 판정 기준. 나중에 쉽게 바꿀 수 있도록 상수로 관리한다.
+// diff = 최근 10경기 승률 - 전체 승률 (%포인트)
+var RECENT_TREND_CONFIG = {
+  UP: 10,        // 이 값 이상이면 상승세
+  DOWN: -10,     // 이 값 이하이면 하락세
+  MIN_GAMES: 3   // 최근 승패합이 이 값 미만이면 표본 부족
+};
+
+// 최근 10경기 승률과 전체 승률을 비교해 "요즘 폼" 문구를 반환한다. (순수 계산)
+// - 최근/전체 승률은 calcRecent/calcTotals의 winRate(승/(승+패), 무승부 제외)를 사용한다.
+// - 승률이 "-"(승패 0)거나 최근 표본이 적으면 안전 문구를 반환한다.
+function calcRecentTrend(matches) {
+  var totals = calcTotals(matches);
+  var recent10 = calcRecent(matches, 10);
+
+  // 최근 승패합(무승부 제외)이 너무 적으면 표본 부족
+  var recentDecided = recent10.wins + recent10.losses;
+  if (recentDecided < RECENT_TREND_CONFIG.MIN_GAMES) {
+    return "아직 표본이 적어요";
+  }
+  // 승률을 계산할 수 없는 경우(전체 또는 최근이 "-")는 판단 보류
+  if (typeof totals.winRate !== "number" || typeof recent10.winRate !== "number") {
+    return "판단하기 일러요";
+  }
+
+  var diff = recent10.winRate - totals.winRate;
+  if (diff >= RECENT_TREND_CONFIG.UP) return "요즘 잘나감 🔥";
+  if (diff <= RECENT_TREND_CONFIG.DOWN) return "최근 부진함 😮‍💨";
+  return "그럭저럭 침 😐";
+}
+
 // 대시보드의 주요 통계 요약 카드를 그린다.
 function renderDashboardSummary(matches) {
   var el = document.getElementById("dashboard-summary");
@@ -2889,6 +2920,7 @@ function renderDashboardSummary(matches) {
 
   var totals = calcTotals(matches);
   var streak = calcStreak(matches);
+  var recent10 = calcRecent(matches, 10); // 최근 10경기 성적 (무승부 포함, 승률=승/(승+패))
 
   var grid = document.createElement("div");
   grid.className = "stat-card-grid";
@@ -2897,6 +2929,8 @@ function renderDashboardSummary(matches) {
   grid.appendChild(createStatCard("승 / 무 / 패", totals.wins + " / " + totals.draws + " / " + totals.losses));
   grid.appendChild(createStatCard("승률", formatWinRate(totals.winRate)));
   grid.appendChild(createStatCard("연승/연패", streakToText(streak)));
+  grid.appendChild(createStatCard("최근 10경기", recentToText(recent10)));
+  grid.appendChild(createStatCard("요즘 폼", calcRecentTrend(matches)));
 
   el.appendChild(grid);
 }
