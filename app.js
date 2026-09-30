@@ -1984,10 +1984,38 @@ function handleSaveMatch() {
   // --- 폼 초기화(신규 모드로 복귀) + 성공 메시지 ---
   var wasEditing = editingMatchId !== null;
   exitEditMode(); // 폼 초기화 + 수정 상태 해제
-  showFormMessage(wasEditing ? "경기가 수정되었습니다." : "경기가 저장되었습니다.", "success");
+
+  // 신규 저장이면 "같은 날 이어치기"를 위해 날짜·구장·사람(파트너/상대)을 방금 값으로 이어 채운다.
+  // (점수·시간·메모는 exitEditMode에서 비워진 상태 유지 → 새 게임 정보만 입력)
+  if (!wasEditing) {
+    prefillNextMatch(savedMatch);
+    showFormMessage("경기가 저장되었습니다. 같은 날 이어서 기록할 수 있어요. (파트너 변경 버튼 활용)", "success");
+  } else {
+    showFormMessage("경기가 수정되었습니다.", "success");
+  }
 
   // 목록(및 준비된 통계·대시보드)을 다시 그려 방금 저장/수정한 내용을 반영한다.
   refreshViews();
+}
+
+// 신규 저장 직후, 같은 날 이어치기를 위해 방금 경기의 날짜·구장·사람을 폼에 다시 채운다.
+// (점수·시간·메모는 채우지 않는다.)
+function prefillNextMatch(prevMatch) {
+  if (!prevMatch) return;
+  var dateInput = document.getElementById("input-date");
+  var venueInput = document.getElementById("input-venue");
+  var partnerInput = document.getElementById("input-partner");
+  var opp1Input = document.getElementById("input-opponent1");
+  var opp2Input = document.getElementById("input-opponent2");
+
+  if (dateInput) dateInput.value = prevMatch.date || "";
+  if (venueInput) venueInput.value = prevMatch.venue || "";
+  if (partnerInput) partnerInput.value = prevMatch.partner || "";
+  if (opp1Input) opp1Input.value = prevMatch.opponent1 || "";
+  if (opp2Input) opp2Input.value = prevMatch.opponent2 || "";
+
+  // 이름을 다시 채웠으므로 NTRP 힌트를 갱신한다.
+  updateNtrpHints();
 }
 
 /*
@@ -2127,6 +2155,27 @@ function handleDeleteMatch(matchId) {
 }
 
 // 폼 제출 이벤트와 취소 버튼에 로직을 연결한다.
+// 파트너/상대 3자리를 한 칸씩 회전시킨다. (같은 날 파트너 교체용)
+// 규칙: 파트너 ← 상대1, 상대1 ← 상대2, 상대2 ← 파트너
+//   나-A-B-C → 나-B-C-A → 나-C-A-B → 나-A-B-C (파트너가 A→B→C 순환)
+function rotatePartners() {
+  var partnerInput = document.getElementById("input-partner");
+  var opp1Input = document.getElementById("input-opponent1");
+  var opp2Input = document.getElementById("input-opponent2");
+  if (!partnerInput || !opp1Input || !opp2Input) return;
+
+  var p = partnerInput.value;
+  var o1 = opp1Input.value;
+  var o2 = opp2Input.value;
+
+  partnerInput.value = o1;
+  opp1Input.value = o2;
+  opp2Input.value = p;
+
+  // 값을 .value로 직접 바꿨으므로 NTRP 힌트를 명시적으로 갱신한다.
+  updateNtrpHints();
+}
+
 function setupMatchForm() {
   var form = document.getElementById("match-form");
   if (form) {
@@ -2143,6 +2192,12 @@ function setupMatchForm() {
       exitEditMode();
       showFormMessage("수정을 취소했습니다.", "success");
     });
+  }
+
+  // 파트너 변경 버튼: 파트너/상대 3자리를 순환시킨다.
+  var rotateButton = document.getElementById("rotate-partners-button");
+  if (rotateButton) {
+    rotateButton.addEventListener("click", rotatePartners);
   }
 }
 
