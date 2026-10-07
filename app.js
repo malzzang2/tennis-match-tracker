@@ -243,6 +243,7 @@ function sanitizeMatches(rawMatches) {
       result: (m.result === "W" || m.result === "L" || m.result === "D") ? m.result : "",
       myScore: normalizeScore(m.myScore),   // 숫자 또는 null (구버전 데이터엔 없음)
       oppScore: normalizeScore(m.oppScore), // 숫자 또는 null
+      myCourt: (m.myCourt === "FH" || m.myCourt === "BH") ? m.myCourt : "", // 내 포지션(포핸드/백핸드 코트), 구버전은 ""
       score: typeof m.score === "string" ? m.score : "",
       duration: typeof m.duration === "string" ? m.duration : "",
       memo: typeof m.memo === "string" ? m.memo : ""
@@ -419,6 +420,18 @@ function normalizeScore(value) {
     return null;
   }
   return Math.floor(num);
+}
+
+// 내 포지션(코트) 값을 정규화한다. "FH"(포핸드 코트)/"BH"(백핸드 코트)만 허용, 그 외는 "".
+function normalizeCourt(value) {
+  return (value === "FH" || value === "BH") ? value : "";
+}
+
+// 포지션 코드를 사람이 읽는 문구로 바꾼다.
+function courtToLabel(court) {
+  if (court === "FH") return "포핸드 코트";
+  if (court === "BH") return "백핸드 코트";
+  return "";
 }
 
 // 내 점수/상대 점수로 경기 결과(W/L/D)를 판정한다.
@@ -846,6 +859,7 @@ function buildNewMatch(formData) {
     result: decideResultFromScores(my, opp), // 점수로 자동 판정: "W"/"L"/"D"
     myScore: my,   // 내 점수 (숫자 또는 null)
     oppScore: opp, // 상대 점수 (숫자 또는 null)
+    myCourt: normalizeCourt(formData.myCourt), // 내 포지션: "FH"/"BH"/"" (선택)
     score: "",     // 세트 스코어 텍스트 필드는 UI에서 제거됨. 하위호환을 위해 필드만 빈 값으로 남긴다.
     duration: formData.duration,
     memo: formData.memo
@@ -878,6 +892,7 @@ function buildUpdatedMatch(existingMatch, formData) {
     result: decideResultFromScores(my, opp), // 점수로 자동 판정: "W"/"L"/"D"
     myScore: my,
     oppScore: opp,
+    myCourt: normalizeCourt(formData.myCourt), // 내 포지션: "FH"/"BH"/"" (선택)
     // 세트 스코어 텍스트는 UI에서 제거됨. 기존 기록에 값이 있으면 지우지 않고 그대로 보존한다.
     score: (existingMatch && typeof existingMatch.score === "string") ? existingMatch.score : "",
     duration: formData.duration,
@@ -1362,6 +1377,35 @@ function calcByVenue(matches) {
   });
 
   return buildSortedNameStats(groups);
+}
+
+// 내 포지션별 통계. 포핸드 코트(FH) / 백핸드 코트(BH) 그룹별 경기·승·무·패·승률. (순수 계산)
+// - 미입력("") 경기는 포지션 통계에서 제외한다. (전체 통계엔 영향 없음)
+// - 승률은 기존 규칙(승/(승+패), 무승부 제외)을 재사용(addResultToGroup + calcWinRate).
+// 반환: { fh: {total,wins,losses,draws,winRate}, bh: {...} }
+function calcByCourt(matches) {
+  var list = Array.isArray(matches) ? matches : [];
+  var groups = {};
+
+  list.forEach(function (m) {
+    if (m.myCourt !== "FH" && m.myCourt !== "BH") {
+      return; // 포지션 미입력 경기는 제외
+    }
+    addResultToGroup(groups, m.myCourt, m.result);
+  });
+
+  function pick(key) {
+    var g = groups[key] || { total: 0, wins: 0, losses: 0, draws: 0 };
+    return {
+      total: g.total,
+      wins: g.wins,
+      losses: g.losses,
+      draws: g.draws || 0,
+      winRate: calcWinRate(g.wins, g.wins + g.losses)
+    };
+  }
+
+  return { fh: pick("FH"), bh: pick("BH") };
 }
 
 
@@ -1850,6 +1894,34 @@ function setupScoreInputs() {
   updateResultPreview(); // 초기 표시
 }
 
+// 포지션 버튼의 선택 상태(is-selected)를 현재 hidden input 값에 맞춰 갱신한다.
+function updateCourtButtons() {
+  var courtInput = document.getElementById("input-court");
+  var current = courtInput ? courtInput.value : "";
+  document.querySelectorAll(".court-button").forEach(function (b) {
+    if (b.dataset.court === current && current !== "") {
+      b.classList.add("is-selected");
+    } else {
+      b.classList.remove("is-selected");
+    }
+  });
+}
+
+// 내 포지션 버튼 2개(포핸드/백핸드 코트) 동작을 설정한다.
+// - 같은 버튼을 다시 누르면 선택 해제(미입력)된다. (선택 사항이므로)
+function setupCourtButtons() {
+  var courtInput = document.getElementById("input-court");
+  document.querySelectorAll(".court-button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (!courtInput) return;
+      // 이미 선택된 버튼을 다시 누르면 해제, 아니면 해당 값으로 설정
+      courtInput.value = (courtInput.value === button.dataset.court) ? "" : button.dataset.court;
+      updateCourtButtons();
+    });
+  });
+  updateCourtButtons();
+}
+
 /*
   [Task 6] 경기 저장 로직 (신규 등록)
   - 저장 버튼 클릭 시 폼 값을 읽어 신규 경기 객체를 만들고 tennis_matches에 추가 저장한다.
@@ -1869,6 +1941,7 @@ function readMatchForm() {
     result: document.getElementById("input-result").value,
     myScore: document.getElementById("input-my-score").value,
     oppScore: document.getElementById("input-opp-score").value,
+    myCourt: document.getElementById("input-court").value,
     duration: document.getElementById("input-duration").value,
     memo: document.getElementById("input-memo").value
   };
@@ -1923,6 +1996,13 @@ function resetMatchForm() {
   if (resultInput) {
     resultInput.value = "";
   }
+
+  // 내 포지션 hidden 값 비우기 + 버튼 선택 해제
+  var courtInput = document.getElementById("input-court");
+  if (courtInput) {
+    courtInput.value = "";
+  }
+  updateCourtButtons();
 
   // 점수 기반 결과 미리보기를 초기 상태(안내 문구)로 되돌린다.
   updateResultPreview();
@@ -2040,6 +2120,11 @@ function fillMatchForm(match) {
   var oppInput = document.getElementById("input-opp-score");
   if (myInput) myInput.value = (typeof match.myScore === "number") ? String(match.myScore) : "";
   if (oppInput) oppInput.value = (typeof match.oppScore === "number") ? String(match.oppScore) : "";
+
+  // 내 포지션 채우기 (FH/BH/"") + 버튼 선택 상태 반영
+  var courtInput = document.getElementById("input-court");
+  if (courtInput) courtInput.value = normalizeCourt(match.myCourt);
+  updateCourtButtons();
 
   var resultInput = document.getElementById("input-result");
   var preview = document.getElementById("result-preview");
@@ -2351,6 +2436,11 @@ function createMatchCard(match) {
     card.appendChild(createInfoRow("점수", scoreText));
   } else if (match.score && match.score !== "") {
     card.appendChild(createInfoRow("점수", match.score));
+  }
+
+  // 내 포지션 (값이 있을 때만 표시)
+  if (match.myCourt === "FH" || match.myCourt === "BH") {
+    card.appendChild(createInfoRow("내 포지션", courtToLabel(match.myCourt)));
   }
 
   card.appendChild(createInfoRow("시간", match.duration || ""));
@@ -2927,6 +3017,43 @@ function renderStats() {
   renderPartnerStatsTable(calcByPartnerWithNtrp(matches));
   renderOpponentStatsTable(calcByOpponentWithNtrp(matches));
   renderNameStatsTable("stats-venue", calcByVenue(matches), "구장", "표시할 구장 통계가 없습니다.");
+  renderCourtStats(calcByCourt(matches));
+}
+
+// 내 포지션별 통계 표(포핸드 코트 / 백핸드 코트)를 그린다.
+function renderCourtStats(stats) {
+  var el = document.getElementById("stats-court");
+  if (!el) return;
+  el.innerHTML = "";
+
+  // 포지션이 입력된 경기가 하나도 없으면 안내만 표시
+  if (stats.fh.total === 0 && stats.bh.total === 0) {
+    el.appendChild(createStatsEmpty("포지션이 입력된 경기가 없습니다."));
+    return;
+  }
+
+  var table = document.createElement("table");
+  table.className = "stats-table";
+  table.appendChild(createTableHead(["포지션", "경기", "승", "무", "패", "승률"]));
+
+  var tbody = document.createElement("tbody");
+  var rows = [
+    { label: "포핸드 코트", g: stats.fh },
+    { label: "백핸드 코트", g: stats.bh }
+  ];
+  rows.forEach(function (row) {
+    var g = row.g;
+    tbody.appendChild(createTableRow([
+      row.label,
+      String(g.total),
+      String(g.wins),
+      String(g.draws),
+      String(g.losses),
+      formatWinRate(g.winRate)
+    ]));
+  });
+  table.appendChild(tbody);
+  el.appendChild(table);
 }
 
 /*
@@ -3541,6 +3668,7 @@ document.addEventListener("DOMContentLoaded", function () {
   setDefaultDate();
   fillNameDatalists();
   setupScoreInputs();
+  setupCourtButtons();
 
   // Task 6: 폼 저장 로직 연결
   setupMatchForm();

@@ -85,6 +85,7 @@
           <p>승률 70%를 향해 모두 화이팅!</p>
           <p>26.09.29 - 무승부기능, NTRP경기분석 기능 추가</p>
           <p>26.09.30 - 설명서추가, 화면일부조정, 대소문자 수정</p>
+          <p>26.10.07 - 포지션구분 (포핸드, 백핸드) 기능추가</p>
           <p><a href="mailto:ljc99@nate.com">기능제안 ljc99@nate.com</a></p>
         </section>
 
@@ -202,6 +203,17 @@
             <input type="hidden" id="input-result" name="result" value="" />
           </div>
 
+          <!-- 내 포지션: 포핸드 코트 / 백핸드 코트 (선택) -->
+          <div class="field">
+            <label>내 포지션 (선택)</label>
+            <div class="court-buttons">
+              <button type="button" class="court-button" data-court="FH">포핸드 코트</button>
+              <button type="button" class="court-button" data-court="BH">백핸드 코트</button>
+            </div>
+            <!-- 선택된 포지션(FH/BH)을 담아 두는 숨은 입력칸 -->
+            <input type="hidden" id="input-court" name="myCourt" value="" />
+          </div>
+
           <!-- 경기 시간 (자유 입력) -->
           <div class="field">
             <label for="input-duration">경기 시간</label>
@@ -289,6 +301,10 @@
         <!-- 구장별 통계 -->
         <h2 class="section-title">구장별 통계</h2>
         <div id="stats-venue"></div>
+
+        <!-- 내 포지션별 통계 -->
+        <h2 class="section-title">내 포지션별 통계</h2>
+        <div id="stats-court"></div>
 
       </section>
 

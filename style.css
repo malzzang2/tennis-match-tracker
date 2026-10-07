@@ -1143,3 +1143,31 @@ body {
 .rotate-button:hover {
   background-color: #e8f0ea;
 }
+
+/* 내 포지션 선택 버튼 (포핸드 코트 / 백핸드 코트) */
+.court-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.court-button {
+  flex: 1;
+  min-height: 48px;
+  border: 2px solid #cfd8d3;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #666;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.court-button.is-selected {
+  background-color: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+
+.court-button:hover { border-color: #9e9e9e; }
+.court-button.is-selected:hover { border-color: #2e7d32; }
