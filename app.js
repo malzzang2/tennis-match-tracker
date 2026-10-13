@@ -235,7 +235,7 @@ function sanitizeMatches(rawMatches) {
       matchId: typeof m.matchId === "string" && m.matchId !== "" ? m.matchId : createMatchId(),
       createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
       date: typeof m.date === "string" ? m.date : "",
-      type: typeof m.type === "string" ? m.type : MATCH_TYPE_DOUBLES,
+      type: (m.type === MATCH_TYPE_SINGLES || m.type === MATCH_TYPE_DOUBLES) ? m.type : MATCH_TYPE_DOUBLES, // 구버전/이상값은 복식
       venue: typeof m.venue === "string" ? m.venue : "",
       partner: typeof m.partner === "string" ? m.partner : "",
       opponent1: typeof m.opponent1 === "string" ? m.opponent1 : "",
@@ -638,19 +638,22 @@ function getMatchNtrpAnalysis(match) {
   var safeMatch = match || {};
 
   var userNtrp = getUserNtrp();
-  var partnerNtrp = getOpponentNtrp(safeMatch.partner);   // 파트너도 공용 Master에서 조회
+
+  // 파트너는 이름이 있을 때만 계산 대상(단식은 파트너가 없음 → 우리팀=나 혼자).
+  var hasPartner = normalizeName(safeMatch.partner) !== "";
+  var partnerNtrp = hasPartner ? getOpponentNtrp(safeMatch.partner) : null;
   var opponent1Ntrp = getOpponentNtrp(safeMatch.opponent1);
 
-  // opponent2는 이름이 비어 있으면 계산 대상에서 제외(기존 데이터 호환). 조회 자체는 안전.
+  // opponent2는 이름이 비어 있으면 계산 대상에서 제외(단식/기존 데이터 호환). 조회 자체는 안전.
   var hasOpponent2 = normalizeName(safeMatch.opponent2) !== "";
   var opponent2Ntrp = hasOpponent2 ? getOpponentNtrp(safeMatch.opponent2) : null;
 
-  // 필수 인원의 NTRP가 하나라도 없으면 미등록 처리(요구사항 6).
-  // - 우리 팀: 사용자 + 파트너
+  // 필수 인원의 NTRP가 하나라도 없으면 미등록 처리.
+  // - 우리 팀: 사용자 (+ 파트너가 있으면 파트너도 필수)
   // - 상대 팀: 상대1 (+ 상대2가 있으면 상대2도 필수)
   var missing =
     (typeof userNtrp !== "number") ||
-    (typeof partnerNtrp !== "number") ||
+    (hasPartner && typeof partnerNtrp !== "number") ||
     (typeof opponent1Ntrp !== "number") ||
     (hasOpponent2 && typeof opponent2Ntrp !== "number");
 
@@ -834,8 +837,19 @@ function sortMatchesByRecent(matches) {
   return safe;
 }
 
-// 경기 형태 고정값 (저장 데이터의 type 값). UI 표시 문구는 "복식"으로 유지.
-var MATCH_TYPE_DOUBLES = "doubles";
+// 경기 형태 값 (저장 데이터의 type 값).
+var MATCH_TYPE_DOUBLES = "doubles"; // 복식
+var MATCH_TYPE_SINGLES = "singles"; // 단식
+
+// 경기 형태 값을 정규화한다. singles/doubles만 허용, 그 외/빈값은 복식(기본·하위호환).
+function normalizeMatchType(value) {
+  return value === MATCH_TYPE_SINGLES ? MATCH_TYPE_SINGLES : MATCH_TYPE_DOUBLES;
+}
+
+// 경기 형태 코드를 사람이 읽는 문구로 바꾼다.
+function matchTypeToLabel(type) {
+  return type === MATCH_TYPE_SINGLES ? "단식" : "복식";
+}
 
 // 폼에서 읽은 값들(formData)로 "신규 경기 객체"를 만든다.
 // - matchId / createdAt은 새로 생성한다.
@@ -847,19 +861,23 @@ var MATCH_TYPE_DOUBLES = "doubles";
 function buildNewMatch(formData) {
   var my = normalizeScore(formData.myScore);
   var opp = normalizeScore(formData.oppScore);
+  var type = normalizeMatchType(formData.type);
+  var isSingles = type === MATCH_TYPE_SINGLES;
   return {
     matchId: createMatchId(),
     createdAt: createCreatedAt(),
     date: formData.date,
-    type: MATCH_TYPE_DOUBLES,
+    type: type,
     venue: normalizeName(formData.venue),
-    partner: normalizeName(formData.partner),
+    // 단식은 파트너·상대2가 없으므로 빈 값으로 저장한다.
+    partner: isSingles ? "" : normalizeName(formData.partner),
     opponent1: normalizeName(formData.opponent1),
-    opponent2: normalizeName(formData.opponent2),
+    opponent2: isSingles ? "" : normalizeName(formData.opponent2),
     result: decideResultFromScores(my, opp), // 점수로 자동 판정: "W"/"L"/"D"
     myScore: my,   // 내 점수 (숫자 또는 null)
     oppScore: opp, // 상대 점수 (숫자 또는 null)
-    myCourt: normalizeCourt(formData.myCourt), // 내 포지션: "FH"/"BH"/"" (선택)
+    // 포지션(포핸드/백핸드 코트)은 복식 개념이라 단식에선 빈 값.
+    myCourt: isSingles ? "" : normalizeCourt(formData.myCourt),
     score: "",     // 세트 스코어 텍스트 필드는 UI에서 제거됨. 하위호환을 위해 필드만 빈 값으로 남긴다.
     duration: formData.duration,
     memo: formData.memo
@@ -880,19 +898,23 @@ function deleteMatchById(matches, matchId) {
 function buildUpdatedMatch(existingMatch, formData) {
   var my = normalizeScore(formData.myScore);
   var opp = normalizeScore(formData.oppScore);
+  var type = normalizeMatchType(formData.type);
+  var isSingles = type === MATCH_TYPE_SINGLES;
   return {
     matchId: existingMatch.matchId,     // 유지
     createdAt: existingMatch.createdAt, // 유지
     date: formData.date,
-    type: MATCH_TYPE_DOUBLES,
+    type: type,
     venue: normalizeName(formData.venue),
-    partner: normalizeName(formData.partner),
+    // 단식은 파트너·상대2가 없으므로 빈 값으로 저장한다.
+    partner: isSingles ? "" : normalizeName(formData.partner),
     opponent1: normalizeName(formData.opponent1),
-    opponent2: normalizeName(formData.opponent2),
+    opponent2: isSingles ? "" : normalizeName(formData.opponent2),
     result: decideResultFromScores(my, opp), // 점수로 자동 판정: "W"/"L"/"D"
     myScore: my,
     oppScore: opp,
-    myCourt: normalizeCourt(formData.myCourt), // 내 포지션: "FH"/"BH"/"" (선택)
+    // 포지션(포핸드/백핸드 코트)은 복식 개념이라 단식에선 빈 값.
+    myCourt: isSingles ? "" : normalizeCourt(formData.myCourt),
     // 세트 스코어 텍스트는 UI에서 제거됨. 기존 기록에 값이 있으면 지우지 않고 그대로 보존한다.
     score: (existingMatch && typeof existingMatch.score === "string") ? existingMatch.score : "",
     duration: formData.duration,
@@ -1406,6 +1428,32 @@ function calcByCourt(matches) {
   }
 
   return { fh: pick("FH"), bh: pick("BH") };
+}
+
+// 경기 형태별 통계. 복식(doubles) / 단식(singles) 그룹별 경기·승·무·패·승률. (순수 계산)
+// - 구버전/이상값 type은 복식으로 간주(normalizeMatchType). 전체 통계엔 영향 없음(여기선 분류만).
+// - 승률은 기존 규칙(승/(승+패), 무승부 제외) 재사용.
+// 반환: { doubles: {total,wins,losses,draws,winRate}, singles: {...} }
+function calcByType(matches) {
+  var list = Array.isArray(matches) ? matches : [];
+  var groups = {};
+
+  list.forEach(function (m) {
+    addResultToGroup(groups, normalizeMatchType(m.type), m.result);
+  });
+
+  function pick(key) {
+    var g = groups[key] || { total: 0, wins: 0, losses: 0, draws: 0 };
+    return {
+      total: g.total,
+      wins: g.wins,
+      losses: g.losses,
+      draws: g.draws || 0,
+      winRate: calcWinRate(g.wins, g.wins + g.losses)
+    };
+  }
+
+  return { doubles: pick(MATCH_TYPE_DOUBLES), singles: pick(MATCH_TYPE_SINGLES) };
 }
 
 
@@ -1922,6 +1970,50 @@ function setupCourtButtons() {
   updateCourtButtons();
 }
 
+// 경기 형태 버튼의 선택 상태(is-selected)를 현재 hidden input 값에 맞춰 갱신한다.
+function updateTypeButtons() {
+  var typeInput = document.getElementById("input-type");
+  var current = normalizeMatchType(typeInput ? typeInput.value : "");
+  document.querySelectorAll(".type-button").forEach(function (b) {
+    if (b.dataset.type === current) b.classList.add("is-selected");
+    else b.classList.remove("is-selected");
+  });
+}
+
+// 선택된 경기 형태에 맞춰 입력 폼을 조정한다.
+// - 단식: 파트너·상대2·포지션 필드와 파트너 변경 버튼 숨김, 상대1 라벨을 "상대 선수"로
+// - 복식: 모두 표시, 상대1 라벨 "상대 선수 1"
+function applyMatchTypeUI() {
+  var typeInput = document.getElementById("input-type");
+  var isSingles = normalizeMatchType(typeInput ? typeInput.value : "") === MATCH_TYPE_SINGLES;
+
+  var partnerField = document.getElementById("field-partner");
+  var opp2Field = document.getElementById("field-opponent2");
+  var courtField = document.getElementById("field-court");
+  var opp1Label = document.getElementById("label-opponent1");
+
+  if (partnerField) partnerField.hidden = isSingles;
+  if (opp2Field) opp2Field.hidden = isSingles;
+  if (courtField) courtField.hidden = isSingles;
+  if (opp1Label) opp1Label.textContent = isSingles ? "상대 선수" : "상대 선수 1";
+
+  updateTypeButtons();
+  updateNtrpHints(); // 숨김/표시 바뀐 뒤 NTRP 힌트 갱신
+}
+
+// 경기 형태 버튼 2개(복식/단식) 동작을 설정한다.
+function setupTypeButtons() {
+  var typeInput = document.getElementById("input-type");
+  document.querySelectorAll(".type-button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (!typeInput) return;
+      typeInput.value = normalizeMatchType(button.dataset.type);
+      applyMatchTypeUI();
+    });
+  });
+  applyMatchTypeUI();
+}
+
 /*
   [Task 6] 경기 저장 로직 (신규 등록)
   - 저장 버튼 클릭 시 폼 값을 읽어 신규 경기 객체를 만들고 tennis_matches에 추가 저장한다.
@@ -1934,6 +2026,7 @@ function setupCourtButtons() {
 function readMatchForm() {
   return {
     date: document.getElementById("input-date").value,
+    type: document.getElementById("input-type").value,
     venue: document.getElementById("input-venue").value,
     partner: document.getElementById("input-partner").value,
     opponent1: document.getElementById("input-opponent1").value,
@@ -2004,6 +2097,13 @@ function resetMatchForm() {
   }
   updateCourtButtons();
 
+  // 경기 형태는 기본값(복식)으로 되돌리고 폼 표시도 복식 기준으로 복구
+  var typeInput = document.getElementById("input-type");
+  if (typeInput) {
+    typeInput.value = MATCH_TYPE_DOUBLES;
+  }
+  applyMatchTypeUI();
+
   // 점수 기반 결과 미리보기를 초기 상태(안내 문구)로 되돌린다.
   updateResultPreview();
 
@@ -2070,6 +2170,7 @@ function handleSaveMatch() {
   if (!wasEditing) {
     prefillNextMatch(savedMatch);
     showFormMessage("경기가 저장되었습니다. 같은 날 이어서 기록할 수 있어요. (파트너 변경 버튼 활용)", "success");
+    maybePromptBackup(); // 오늘 경기가 일정 수(기본 3의 배수) 쌓이면 백업 유도
   } else {
     showFormMessage("경기가 수정되었습니다.", "success");
   }
@@ -2087,6 +2188,11 @@ function prefillNextMatch(prevMatch) {
   var partnerInput = document.getElementById("input-partner");
   var opp1Input = document.getElementById("input-opponent1");
   var opp2Input = document.getElementById("input-opponent2");
+
+  // 직전 경기의 형태(단식/복식)를 유지한다. (같은 날 같은 형태로 이어 치는 경우가 많음)
+  var typeInput = document.getElementById("input-type");
+  if (typeInput) typeInput.value = normalizeMatchType(prevMatch.type);
+  applyMatchTypeUI();
 
   if (dateInput) dateInput.value = prevMatch.date || "";
   if (venueInput) venueInput.value = prevMatch.venue || "";
@@ -2108,6 +2214,10 @@ function prefillNextMatch(prevMatch) {
 // 폼에 경기 값을 채운다. (수정 모드 진입 시 사용)
 function fillMatchForm(match) {
   document.getElementById("input-date").value = match.date || "";
+  // 경기 형태 반영 + 단식/복식에 맞춰 폼 표시 조정
+  var typeInput = document.getElementById("input-type");
+  if (typeInput) typeInput.value = normalizeMatchType(match.type);
+  applyMatchTypeUI();
   document.getElementById("input-venue").value = match.venue || "";
   document.getElementById("input-partner").value = match.partner || "";
   document.getElementById("input-opponent1").value = match.opponent1 || "";
@@ -2284,6 +2394,12 @@ function setupMatchForm() {
   if (rotateButton) {
     rotateButton.addEventListener("click", rotatePartners);
   }
+
+  // 백업 유도 배너의 "지금 백업" 버튼: 바로 백업 다운로드 실행
+  var backupPromptButton = document.getElementById("backup-prompt-button");
+  if (backupPromptButton) {
+    backupPromptButton.addEventListener("click", downloadBackup);
+  }
 }
 
 /*
@@ -2413,7 +2529,14 @@ function createMatchCard(match) {
   resultEl.className = "match-result " + resultToClass(match.result);
   resultEl.textContent = resultToLabel(match.result) + " " + (match.result || "");
 
+  // 경기 형태 배지 (단식/복식)
+  var isSingles = match.type === MATCH_TYPE_SINGLES;
+  var typeEl = document.createElement("span");
+  typeEl.className = "match-type-badge " + (isSingles ? "is-singles" : "is-doubles");
+  typeEl.textContent = matchTypeToLabel(match.type);
+
   header.appendChild(dateEl);
+  header.appendChild(typeEl);
   header.appendChild(resultEl);
   card.appendChild(header);
 
@@ -2427,7 +2550,10 @@ function createMatchCard(match) {
   if (match.venue && match.venue !== "") {
     card.appendChild(createInfoRow("구장", match.venue));
   }
-  card.appendChild(createInfoRow("파트너", match.partner || ""));
+  // 파트너는 복식일 때만 표시 (단식은 파트너 없음)
+  if (!isSingles) {
+    card.appendChild(createInfoRow("파트너", match.partner || ""));
+  }
   card.appendChild(createInfoRow("상대", opponentText));
 
   // 점수: 숫자 점수(내:상대)가 있으면 그것을 표시. 없으면(구버전 경기) 기존 스코어 텍스트로 폴백.
@@ -3018,6 +3144,42 @@ function renderStats() {
   renderOpponentStatsTable(calcByOpponentWithNtrp(matches));
   renderNameStatsTable("stats-venue", calcByVenue(matches), "구장", "표시할 구장 통계가 없습니다.");
   renderCourtStats(calcByCourt(matches));
+  renderTypeStats(calcByType(matches));
+}
+
+// 경기 형태별 통계 표(복식 / 단식)를 그린다.
+function renderTypeStats(stats) {
+  var el = document.getElementById("stats-type");
+  if (!el) return;
+  el.innerHTML = "";
+
+  if (stats.doubles.total === 0 && stats.singles.total === 0) {
+    el.appendChild(createStatsEmpty("표시할 경기가 없습니다."));
+    return;
+  }
+
+  var table = document.createElement("table");
+  table.className = "stats-table";
+  table.appendChild(createTableHead(["형태", "경기", "승", "무", "패", "승률"]));
+
+  var tbody = document.createElement("tbody");
+  var rows = [
+    { label: "복식", g: stats.doubles },
+    { label: "단식", g: stats.singles }
+  ];
+  rows.forEach(function (row) {
+    var g = row.g;
+    tbody.appendChild(createTableRow([
+      row.label,
+      String(g.total),
+      String(g.wins),
+      String(g.draws),
+      String(g.losses),
+      formatWinRate(g.winRate)
+    ]));
+  });
+  table.appendChild(tbody);
+  el.appendChild(table);
 }
 
 // 내 포지션별 통계 표(포핸드 코트 / 백핸드 코트)를 그린다.
@@ -3426,6 +3588,54 @@ function formatDateFromTime(ms) {
   return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8);
 }
 
+// 백업 유도 기준. 나중에 쉽게 바꿀 수 있도록 상수로 관리한다.
+var BACKUP_PROMPT_CONFIG = {
+  GAMES_PER_DAY: 3 // 오늘 경기 수가 이 값의 배수가 될 때마다 백업을 유도한다.
+};
+
+// 오늘 날짜(YYYY-MM-DD)로 저장된 경기 수를 센다.
+function countTodayMatches() {
+  var today = getTodayDateString();
+  var list = loadMatches();
+  var n = 0;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].date === today) n++;
+  }
+  return n;
+}
+
+// 마지막 백업이 "오늘" 이루어졌는지 여부. (그날 이미 백업했으면 유도하지 않기 위함)
+function hasBackedUpToday() {
+  var raw = loadLastBackupAt();
+  var lastAt = raw != null ? Number(raw) : NaN;
+  if (isNaN(lastAt) || lastAt <= 0) return false;
+  return formatDateFromTime(lastAt) === getTodayDateString();
+}
+
+// 백업 유도 배너를 숨긴다.
+function hideBackupPrompt() {
+  var box = document.getElementById("backup-prompt");
+  if (box) box.hidden = true;
+}
+
+// 신규 경기 저장 후 호출: 오늘 경기 수가 기준의 배수이고 그날 아직 백업을 안 했으면 배너를 띄운다.
+function maybePromptBackup() {
+  var box = document.getElementById("backup-prompt");
+  var textEl = document.getElementById("backup-prompt-text");
+  if (!box || !textEl) return;
+
+  var todayCount = countTodayMatches();
+  var per = BACKUP_PROMPT_CONFIG.GAMES_PER_DAY;
+
+  // 조건: 오늘 경기 수가 per의 배수(3,6,9...) && 그날 아직 백업 안 함
+  if (todayCount > 0 && todayCount % per === 0 && !hasBackedUpToday()) {
+    textEl.textContent = "오늘 " + todayCount + "경기가 쌓였어요. 데이터를 백업해 두는 게 좋아요.";
+    box.hidden = false;
+  } else {
+    box.hidden = true;
+  }
+}
+
 // 데이터 백업: JSON 파일 다운로드 + 마지막 백업 시각 기록.
 function downloadBackup() {
   try {
@@ -3445,6 +3655,7 @@ function downloadBackup() {
     // 마지막 백업 시각 기록 후 상태 표시 갱신
     saveLastBackupAt(data.exportedAt);
     renderBackupStatus();
+    hideBackupPrompt(); // 백업했으니 유도 배너 숨김
     showBackupMessage("백업 파일을 다운로드했습니다.", "success");
   } catch (e) {
     console.warn("백업 오류:", e);
@@ -3669,6 +3880,7 @@ document.addEventListener("DOMContentLoaded", function () {
   fillNameDatalists();
   setupScoreInputs();
   setupCourtButtons();
+  setupTypeButtons();
 
   // Task 6: 폼 저장 로직 연결
   setupMatchForm();

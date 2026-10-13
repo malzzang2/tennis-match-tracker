@@ -1171,3 +1171,80 @@ body {
 
 .court-button:hover { border-color: #9e9e9e; }
 .court-button.is-selected:hover { border-color: #2e7d32; }
+
+/* 백업 유도 배너 (오늘 경기가 일정 수 쌓이면 저장 후 노출) */
+.backup-prompt {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #ffe0a3;
+  border-radius: 8px;
+  background-color: #fff8ec;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.backup-prompt-text {
+  flex: 1 1 auto;
+  min-width: 160px;
+  font-size: 0.92rem;
+  color: #8a5a00;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+/* 배너 안의 백업 버튼은 전체폭을 차지하지 않도록 */
+.backup-prompt .save-button {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 16px;
+}
+
+/* 경기 형태 선택 버튼 (복식 / 단식) */
+.type-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.type-button {
+  flex: 1;
+  min-height: 48px;
+  border: 2px solid #cfd8d3;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #666;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.type-button.is-selected {
+  background-color: #2e7d32;
+  border-color: #2e7d32;
+  color: #fff;
+}
+
+.type-button:hover { border-color: #9e9e9e; }
+.type-button.is-selected:hover { border-color: #2e7d32; }
+
+/* 경기 목록 카드의 형태 배지 (단식/복식) */
+.match-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.match-type-badge.is-doubles {
+  background-color: #e8f0fe;
+  color: #1a56c4;
+}
+
+.match-type-badge.is-singles {
+  background-color: #fdeef2;
+  color: #c2185b;
+}
