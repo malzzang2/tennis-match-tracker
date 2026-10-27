@@ -62,14 +62,16 @@ body {
 }
 
 .tab-button {
-  flex: 1; /* 3개 버튼이 가로 폭을 균등하게 나눠 가짐 */
+  flex: 1; /* 4개 버튼이 가로 폭을 균등하게 나눠 가짐 */
   min-height: 44px; /* 터치하기 충분한 크기 (설계 §5) */
+  padding: 0 4px;
   border: 1px solid #cfd8d3;
   background-color: #ffffff;
   color: #555;
   font-size: 1rem;
   border-radius: 8px;
   cursor: pointer;
+  white-space: nowrap; /* 탭 라벨이 줄바꿈되지 않도록 */
 }
 
 /* 현재 선택된 탭 버튼 강조 */
@@ -692,9 +694,13 @@ body {
   .app-title {
     font-size: 1.3rem;
   }
-  /* 탭 글자가 줄바꿈되지 않도록 약간 축소 */
+  /* 탭 글자가 줄바꿈되지 않도록 약간 축소 (탭 4개 기준) */
+  .tab-bar {
+    gap: 5px;
+  }
   .tab-button {
-    font-size: 0.9rem;
+    font-size: 0.78rem;
+    padding: 0 2px;
   }
 }
 
@@ -1247,4 +1253,63 @@ body {
 .match-type-badge.is-singles {
   background-color: #fdeef2;
   color: #c2185b;
+}
+
+/* ============================================================
+   선수 관리 탭 (내 정보 + 상대방 명단)
+   ============================================================ */
+
+/* 관리 탭 안의 소제목(내 정보 / 상대방 명단) 그룹 구분 */
+.manage-group-title {
+  margin-top: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #e6f0e7;
+}
+
+/* 두 번째 소제목(상대방 명단)은 내 정보 블록과 간격을 더 둔다 */
+.manage-group-title + .opponent-master-section,
+.username-edit + .manage-group-title {
+  margin-top: 20px;
+}
+
+/* 관리 탭에서는 사용자명 수정 블록의 상단 여백을 소제목 기준으로 정리 */
+#manage .username-edit {
+  margin-top: 4px;
+}
+
+/* 상대방 이름 검색/필터 입력칸 */
+.master-search-field {
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+.master-search-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* 내 NTRP 저장 확인 토스트: 기본은 여백 최소화, 표시될 때만 간격 */
+#my-ntrp-message {
+  margin-top: 6px;
+  min-height: 0;
+  transition: opacity 0.15s ease;
+}
+
+#my-ntrp-message:empty {
+  margin-top: 0;
+}
+
+/* 상대방 이름 실시간 중복 안내 (입력 중 표시) */
+.master-dup-hint {
+  margin-top: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #c62828; /* 경고: 빨강 계열 */
+  word-break: keep-all;
 }

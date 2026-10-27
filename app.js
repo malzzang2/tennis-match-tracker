@@ -1514,6 +1514,12 @@ function setupTabs() {
       if (button.dataset.tab === "dashboard") {
         renderDashboard();
       }
+
+      // 선수 관리 탭에 들어갈 때: 사용자명 현재값·내 NTRP·상대방 목록을 최신으로 갱신한다.
+      if (button.dataset.tab === "manage") {
+        renderMyNtrp();
+        renderOpponentMasterList();
+      }
     });
   });
 }
@@ -1674,13 +1680,36 @@ var editingMasterName = null;
 var masterListPage = 1;
 var MASTER_LIST_PAGE_SIZE = 10;
 
+// 상대방 목록 이름 검색어 (빈 문자열이면 전체 표시). 비교는 opponentNameKey로 대소문자 무시.
+var masterSearchQuery = "";
+
+// 상대방 이름 → 경기 수(total) 맵을 만든다. (경기 기록 기반, 읽기 전용)
+// calcByOpponent를 그대로 재사용하므로 동일 경기 내 상대 중복은 1회로 집계된다.
+function buildOpponentMatchCountMap() {
+  var map = {};
+  var stats = calcByOpponent(loadMatches());
+  stats.forEach(function (row) {
+    map[opponentNameKey(row.name)] = row.total;
+  });
+  return map;
+}
+
 // 상대방 Master 목록을 표로 그린다.
 function renderOpponentMasterList() {
   var el = document.getElementById("master-list");
   if (!el) return;
   el.innerHTML = "";
 
-  var list = loadOpponentMaster().slice();
+  var fullList = loadOpponentMaster().slice();
+
+  // 검색어가 있으면 이름에 검색어가 포함된 항목만 남긴다. (대소문자 무시)
+  var query = opponentNameKey(masterSearchQuery);
+  var list = query === ""
+    ? fullList
+    : fullList.filter(function (m) {
+        return opponentNameKey(m.name).indexOf(query) !== -1;
+      });
+
   // 이름 오름차순 정렬 (안정적 표시)
   list.sort(function (a, b) {
     var an = normalizeName(a.name), bn = normalizeName(b.name);
@@ -1692,10 +1721,18 @@ function renderOpponentMasterList() {
   if (list.length === 0) {
     var p = document.createElement("p");
     p.className = "stats-empty";
-    p.textContent = "등록된 상대방이 없습니다.";
+    // 등록 자체가 없을 때와 검색 결과가 없을 때를 구분해 안내한다.
+    if (fullList.length === 0) {
+      p.textContent = "등록된 상대방이 없습니다.";
+    } else {
+      p.textContent = "'" + masterSearchQuery + "' 검색 결과가 없습니다.";
+    }
     el.appendChild(p);
     return;
   }
+
+  // 상대방별 경기 수 맵 (이 목록 렌더에서만 1회 계산)
+  var countMap = buildOpponentMatchCountMap();
 
   // 페이지 범위 보정 (삭제 등으로 현재 페이지가 범위를 벗어난 경우)
   var totalPages = Math.max(1, Math.ceil(list.length / MASTER_LIST_PAGE_SIZE));
@@ -1711,7 +1748,7 @@ function renderOpponentMasterList() {
 
   var thead = document.createElement("thead");
   var htr = document.createElement("tr");
-  ["상대방", "NTRP", "관리"].forEach(function (h) {
+  ["상대방", "NTRP", "경기수", "관리"].forEach(function (h) {
     var th = document.createElement("th");
     th.textContent = h;
     htr.appendChild(th);
@@ -1730,6 +1767,12 @@ function renderOpponentMasterList() {
     var ntrpTd = document.createElement("td");
     ntrpTd.textContent = (typeof m.ntrp === "number") ? m.ntrp.toFixed(1) : "-";
     tr.appendChild(ntrpTd);
+
+    // 경기 수: 이 상대방이 등장한 경기 수 (경기 기록 기반, 0이면 "-")
+    var countTd = document.createElement("td");
+    var cnt = countMap[opponentNameKey(m.name)] || 0;
+    countTd.textContent = cnt > 0 ? String(cnt) : "-";
+    tr.appendChild(countTd);
 
     var actionTd = document.createElement("td");
     var editBtn = document.createElement("button");
@@ -1775,6 +1818,7 @@ function resetMasterForm() {
   if (ntrpInput) ntrpInput.value = "";
   if (addButton) addButton.textContent = "추가";
   if (cancelButton) cancelButton.hidden = true;
+  updateMasterDupHint(); // 이름이 비었으므로 중복 안내도 숨김
 }
 
 // [수정] 클릭: 해당 Master 값을 폼에 채우고 수정 모드로 전환.
@@ -1791,6 +1835,7 @@ function startEditMaster(name) {
   if (addButton) addButton.textContent = "저장";
   if (cancelButton) cancelButton.hidden = false;
   showMasterMessage("", "success");
+  updateMasterDupHint(); // 수정 모드이므로 실시간 중복 안내는 숨김
   if (nameInput) nameInput.focus();
 }
 
@@ -1857,6 +1902,57 @@ function setupOpponentMaster() {
     resetMasterForm();
     showMasterMessage("", "success");
   });
+
+  // 이름 검색/필터: 입력할 때마다 목록을 다시 그린다. (검색 시 첫 페이지로)
+  var searchInput = document.getElementById("master-search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", function () {
+      masterSearchQuery = searchInput.value || "";
+      masterListPage = 1;
+      renderOpponentMasterList();
+    });
+  }
+
+  // 이름 입력 중 실시간 중복 안내: 입력할 때마다 기존 등록 여부를 확인해 표시한다.
+  var nameInput = document.getElementById("master-name-input");
+  if (nameInput) {
+    nameInput.addEventListener("input", updateMasterDupHint);
+  }
+}
+
+// 상대방 이름 입력칸 아래의 실시간 중복 안내를 갱신한다.
+// - 신규 추가 모드(editingMasterName === null)에서만 동작한다. (수정 모드에선 자기 자신과 겹칠 수 있어 생략)
+// - 입력한 이름이 Master에 이미 있으면 기존 NTRP까지 함께 안내한다. (대소문자 무시)
+function updateMasterDupHint() {
+  var hint = document.getElementById("master-name-dup-hint");
+  var nameInput = document.getElementById("master-name-input");
+  if (!hint || !nameInput) return;
+
+  // 수정 모드에서는 실시간 안내를 숨긴다.
+  if (editingMasterName !== null) {
+    hint.hidden = true;
+    hint.textContent = "";
+    return;
+  }
+
+  var name = normalizeName(nameInput.value);
+  if (name === "") {
+    hint.hidden = true;
+    hint.textContent = "";
+    return;
+  }
+
+  var existing = findOpponentMaster(name);
+  if (existing) {
+    var ntrpText = (typeof existing.ntrp === "number")
+      ? ("NTRP " + existing.ntrp.toFixed(1))
+      : "NTRP 미등록";
+    hint.textContent = "⚠ 이미 등록된 상대방입니다 · " + ntrpText;
+    hint.hidden = false;
+  } else {
+    hint.hidden = true;
+    hint.textContent = "";
+  }
 }
 
 // [내 NTRP] select에 후보 옵션을 채운다. (첫 옵션 "모름"은 유지)
@@ -1900,8 +1996,35 @@ function setupMyNtrp() {
       saveMyNtrp(select ? select.value : "");
       renderMyNtrp();
       updateNtrpHints(); // 경기 입력 화면의 내 NTRP 표시도 갱신
+
+      // 저장 확인 토스트: 저장된 현재 값을 다시 읽어 메시지를 만든다.
+      var saved = loadMyNtrp();
+      var msg = (typeof saved === "number")
+        ? ("저장했습니다 ✓ (내 NTRP " + saved.toFixed(1) + ")")
+        : "저장했습니다 ✓ (내 NTRP 미설정)";
+      showMyNtrpMessage(msg);
     });
   }
+}
+
+// [내 NTRP] 저장 확인 토스트 메시지를 잠깐 표시한다. (약 2.5초 후 사라짐)
+var myNtrpMessageTimer = null;
+function showMyNtrpMessage(text) {
+  var el = document.getElementById("my-ntrp-message");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("is-error");
+  el.classList.add("is-success");
+  el.classList.add("is-visible");
+  // 이전 타이머가 있으면 지우고 새로 건다. (연속 저장 시 메시지가 끊기지 않도록)
+  if (myNtrpMessageTimer !== null) {
+    clearTimeout(myNtrpMessageTimer);
+  }
+  myNtrpMessageTimer = setTimeout(function () {
+    el.textContent = "";
+    el.classList.remove("is-visible");
+    myNtrpMessageTimer = null;
+  }, 2500);
 }
 
 // 내 점수/상대 점수로 자동 판정된 결과를 숨은 input(result)과 미리보기 텍스트에 반영한다.
